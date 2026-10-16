@@ -1,3 +1,5 @@
+"""Database initialization and schema management for the integration."""
+
 from pathlib import Path
 import sqlite3
 
@@ -63,4 +65,3 @@ def initialize_database():
 
 if __name__ == "__main__":
     initialize_database()
-    print(f"Datenbank erstellt: {DATABASE_PATH}")

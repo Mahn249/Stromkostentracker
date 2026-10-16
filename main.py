@@ -1,3 +1,4 @@
+"""Utility functions for calculating daily electricity cost contributions."""
 
 from calendar import monthrange
 
@@ -32,6 +33,3 @@ if __name__ == "__main__":
         year=2026,
         month=10,
     )
-
-    print(f"Tagesverbrauch: {consumption:.2f} kWh")
-    print(f"Kosten inklusive Grundpreis: {costs:.2f} Euro")
