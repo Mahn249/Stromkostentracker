@@ -1,0 +1,114 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Stromkostentracker",
+        "description": "Richte den Stromkostentracker ein. Die Tarifverwaltung findest du anschließend in den Optionen des Integrationseintrags."
+      }
+    },
+    "abort": {
+      "already_configured": "Der Stromkostentracker ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "error": {
+      "duplicate_tariff_name": "Ein Tarif mit diesem Namen ist bereits vorhanden.",
+      "overlapping_tariff_period": "Dieser Zeitraum überschneidet sich mit einem anderen Tarifzeitraum.",
+      "invalid_tariff_period": "Das Enddatum muss am oder nach dem Startdatum liegen.",
+      "meter_sensor_not_found": "Der ausgewählte Zählersensor ist nicht verfügbar.",
+      "unsupported_meter_unit": "Wähle einen Sensor mit der Einheit W oder kWh.",
+      "duplicate_payment_name": "Ein Abschlag mit diesem Namen ist bereits vorhanden.",
+      "overlapping_payment_period": "Dieser Abschlagszeitraum überschneidet sich mit einem anderen Zeitraum.",
+      "invalid_payment_period": "Das Enddatum muss am oder nach dem Startdatum liegen."
+    },
+    "step": {
+      "init": {
+        "title": "Tarifverwaltung",
+        "menu_options": {
+          "configure_meter": "Verbrauchserfassung konfigurieren",
+          "add_tariff": "Tarifzeitraum hinzufügen",
+          "edit_tariff": "Tarifzeitraum bearbeiten",
+          "delete_tariff": "Tarifzeitraum löschen",
+          "add_payment": "Abschlagszeitraum hinzufügen",
+          "edit_payment": "Abschlagszeitraum bearbeiten",
+          "delete_payment": "Abschlagszeitraum löschen"
+        }
+      },
+      "configure_meter": {
+        "title": "Verbrauchserfassung",
+        "data": {
+          "meter_entity": "Leistungs- oder Zählerstandssensor",
+          "interval_minutes": "Erfassungsintervall (Minuten)"
+        }
+      },
+      "add_tariff": {
+        "title": "Tarifzeitraum hinzufügen",
+        "data": {
+          "name": "Tarifname",
+          "valid_from": "Gültig ab",
+          "valid_until": "Gültig bis (leer = aktuell gültig)",
+          "work_price_per_kwh": "Arbeitspreis pro kWh (€)",
+          "base_price_per_month": "Grundpreis pro Monat (€)"
+        }
+      },
+      "edit_tariff": {
+        "title": "Tarifzeitraum bearbeiten",
+        "data": {"tariff_id": "Tarifzeitraum"}
+      },
+      "edit_tariff_values": {
+        "title": "Tarifzeitraum bearbeiten",
+        "data": {
+          "name": "Tarifname",
+          "valid_from": "Gültig ab",
+          "valid_until": "Gültig bis (leer = aktuell gültig)",
+          "work_price_per_kwh": "Arbeitspreis pro kWh (€)",
+          "base_price_per_month": "Grundpreis pro Monat (€)"
+        }
+      },
+      "delete_tariff": {
+        "title": "Tarifzeitraum löschen",
+        "data": {"tariff_id": "Tarifzeitraum"}
+      },
+      "confirm_delete": {
+        "title": "Tarifzeitraum löschen",
+        "description": "Soll dieser Tarifzeitraum wirklich gelöscht werden?"
+      },
+      "add_payment": {
+        "title": "Abschlagszeitraum hinzufügen",
+        "data": {
+          "name": "Abschlagsname",
+          "valid_from": "Gültig ab",
+          "valid_until": "Gültig bis (leer = aktuell gültig)",
+          "amount_eur": "Abschlagsbetrag (€)",
+          "note": "Anmerkung"
+        }
+      },
+      "edit_payment": {
+        "title": "Abschlagszeitraum bearbeiten",
+        "data": {"payment_id": "Abschlagszeitraum"}
+      },
+      "edit_payment_values": {
+        "title": "Abschlagszeitraum bearbeiten",
+        "data": {
+          "name": "Abschlagsname",
+          "valid_from": "Gültig ab",
+          "valid_until": "Gültig bis (leer = aktuell gültig)",
+          "amount_eur": "Abschlagsbetrag (€)",
+          "note": "Anmerkung"
+        }
+      },
+      "delete_payment": {
+        "title": "Abschlagszeitraum löschen",
+        "data": {"payment_id": "Abschlagszeitraum"}
+      },
+      "confirm_delete_payment": {
+        "title": "Abschlagszeitraum löschen",
+        "description": "Soll dieser Abschlagszeitraum wirklich gelöscht werden?"
+      }
+    },
+    "abort": {
+      "no_tariffs": "Es sind noch keine Tarifzeiträume gespeichert.",
+      "no_payments": "Es sind noch keine Abschlagszeiträume gespeichert."
+    }
+  }
+}

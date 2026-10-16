@@ -1,0 +1,10 @@
+{
+  "domain": "stromkostentracker",
+  "name": "Stromkostentracker",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/Mahn249/Stromkostentracker",
+  "iot_class": "calculated",
+  "version": "0.1.0",
+  "single_config_entry": true
+}
