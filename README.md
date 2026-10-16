@@ -2,29 +2,36 @@
 Datenbank zur Darstellung von historischen Tarifen, Abschlägen und Verbräuchen.
 Eine Custom Integration für Home Assistant zur Berechnung von Stromkosten auf Basis des täglichen Energieverbrauchs.
 
-## Geplante Funktionen
+# Konfiguration
+Nach der Installation müssen Tarfie und Abschläge mit ihren entrprechenden Zeiträumen in den Einstellungen der Integration eingerichtet werden.
+
+# Funktionen
 
 - Täglichen Stromverbrauch erfassen
-- Historische Arbeitspreise und Grundpreise speichern
-- Tages- und Monatskosten berechnen
-- Kosten und Abschläge in Home Assistant anzeigen
+- Historische Arbeitspreise und Grundpreise importieren
+- Tages- Monats- und Jahreskosten berechnen
+- Kosten und Abschläge als Karte in einem Diagramm anzeigen
 
-## Home Assistant: Tarifverwaltung (erster Schritt)
+## Arbeitsweise
 
 Die Integration liegt unter `custom_components/stromkostentracker`. Sie stellt in Home Assistant eine native Optionsverwaltung für Tarif- und Abschlagszeiträume bereit. Dort lassen sich Name, Gültigkeitsbeginn, optionales Gültigkeitsende und die jeweiligen Beträge hinzufügen, bearbeiten und löschen. Bei Abschlägen kann zusätzlich eine Anmerkung hinterlegt werden.
 
 Der Sensor **Aktueller Arbeitspreis** stellt den Arbeitspreis des am heutigen lokalen Datum gültigen Tarifs in `EUR/kWh` bereit. Gibt es für heute keinen gültigen Tarif, ist sein Zustand `unknown`. Er wird beim Start, bei Tarifänderungen und um Mitternacht aktualisiert.
 
-In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfigurieren** einen Sensor mit der Einheit `W` oder `kWh` und ein Erfassungsintervall von 1 bis 1440 Minuten wählen. Ein `W`-Sensor wird anhand der linken Riemann-Summe integriert und durch Division von Wattsekunden durch 3.600.000 in kWh umgerechnet; ein `kWh`-Sensor wird durch Differenz zwischen Anfangs- und Endzählerstand ausgewertet. Die Daten werden am Ende jedes Intervalls in `meter_intervals` geschrieben. Als `source` wird die `entity_id` des ausgewählten Sensors gespeichert. Bei Zählerstandssensoren enthält `consumption_meter_start_kwh` den Startwert und `consumption_meter_kwh` den Endwert des Intervalls.
+In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfigurieren** einen Sensor mit der Einheit `W` oder `kWh` und ein Erfassungsintervall von 1 bis 1440 Minuten (-> Messperiode) wählen. Ein Leistungssensor mit der EInheit `W` wird anhand der linken Riemann-Summe integriert und in kWh umgerechnet; ein Energie-Sensor mit der EInheit `kWh` wird durch Differenz zwischen Anfangs- und Endzählerstand der Messperiode ausgewertet. Die Daten werden am Ende jedes Intervalls in die Tabelle `meter_intervals` der Datenbank geschrieben. Als `source` wird die `entity_id` des ausgewählten Sensors gespeichert. Bei Zählerstandssensoren enthält `consumption_meter_start_kwh` den Startwert und `consumption_meter_kwh` den Endwert des Intervalls.
 
 Nach einem Home-Assistant-Neustart beginnt ein neues Intervall ab dem Neustart; nicht beobachtete Leistung während der Ausfallzeit wird nicht geschätzt. Intervalle mit nicht verfügbaren Leistungswerten werden ausgelassen.
 
-Die Tarifverwaltung liest und ändert direkt die Tabellen in `energy_cost_tracker.db`. Lege `energy_cost_tracker.db` in den Home-Assistant-Konfigurationsordner neben `configuration.yaml`; die Integration legt absichtlich keine neue Datenbank an, wenn die Datei fehlt.
+## Lovelace-Karte
 
-Zum lokalen Testen kopiere den Ordner `custom_components/stromkostentracker` und eine separate Testkopie von `energy_cost_tracker.db` in einen eigenen Home-Assistant-Konfigurationsordner. So bleibt die Originaldatenbank unangetastet. Starte Home Assistant mit diesem Testordner und füge die Integration hinzu. Füge anschließend „Stromkostentracker“ über **Einstellungen → Geräte & Dienste → Integration hinzufügen** hinzu. Über die Optionen des Eintrags kannst du Tarifzeiträume verwalten.
+Die Karte fragt Monatsdaten über `stromkostentracker/month_data` und Jahresdaten über `stromkostentracker/year_data` ab.
+### Füge unter **Einstellungen → Dashboards → Ressourcen** die URL `/stromkostentracker_static/stromkostentracker-card.js` als JavaScript-Modul hinzu.
+Danach kannst du die Karte mit dem Typ `custom:stromkostentracker-card` in einem Dashboard verwenden. In der Monatsansicht werden tägliche Kosten und Tagesabschlag verglichen. In der Jahresansicht zeigt jeder Balken die Kosten eines Monats im Vergleich zum Monatsabschlag. Für den laufenden Monat werden Kosten und Abschlag bis heute verglichen; zukünftige Monate haben keine Verbrauchskosten.
+
+Die Tarifverwaltung liest und ändert direkt die Tabellen in `energy_cost_tracker.db`. Die Datenbank wird in den Home-Assistant-Konfigurationsordner neben `configuration.yaml` abgelegt.
 
 # Datenstruktur
-Alle bisherigen Daten liegen in `energy_cost_tracker.db`. Die Datenbank enthält folgende Tabellen:
+Alle User-Daten liegen in `energy_cost_tracker.db`. Die Datenbank enthält folgende Tabellen:
 
 ## meter_intervals
 `[id, interval_start_utc, interval_end_utc, consumption_meter_kwh, feed_in_meter_kwh, consumption_delta_kwh, note, source, consumption_meter_start_kwh]`
