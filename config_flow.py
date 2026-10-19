@@ -6,8 +6,9 @@ from typing import Any
 import probatio
 
 from homeassistant import config_entries
+from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, UnitOfEnergy, UnitOfPower
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from . import payments as payment_store, tariffs as tariff_store
@@ -17,6 +18,21 @@ from .const import (
     DEFAULT_INTERVAL_MINUTES,
     DOMAIN,
 )
+from .imports.import_excel import ImportResult, count_existing_duplicates, import_excel
+from .imports.inspect_excel import (
+    ExcelInspection,
+    ImportedInterval,
+    InvalidExcelFile,
+    inspect_excel,
+)
+
+CONF_EXCEL_FILE = "excel_file"
+
+
+def _inspect_uploaded_excel(hass: HomeAssistant, file_id: str) -> ExcelInspection:
+    """Inspect and consume an uploaded Excel file."""
+    with process_uploaded_file(hass, file_id) as file_path:
+        return inspect_excel(file_path)
 
 
 class StromkostentrackerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -60,7 +76,106 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                 "add_payment",
                 "edit_payment",
                 "delete_payment",
+                "import_legacy_data",
             ],
+        )
+
+    async def async_step_import_legacy_data(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Upload and validate historical meter readings."""
+        errors: dict[str, str] = {}
+        description_placeholders: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                inspection = await self.hass.async_add_executor_job(
+                    _inspect_uploaded_excel, self.hass, user_input[CONF_EXCEL_FILE]
+                )
+            except InvalidExcelFile, ValueError:
+                errors["base"] = "invalid_excel_file"
+            else:
+                if inspection.errors:
+                    errors["base"] = "invalid_excel_data"
+                    details = inspection.errors.copy()
+                    if inspection.error_count > len(details):
+                        details.append(
+                            f"... und {inspection.error_count - len(details)} "
+                            "weitere fehlerhafte Zeilen."
+                        )
+                    description_placeholders = {"validation_errors": "\n".join(details)}
+                else:
+                    try:
+                        duplicates = await self.hass.async_add_executor_job(
+                            count_existing_duplicates, inspection.rows
+                        )
+                    except OSError, sqlite3.Error, ValueError:
+                        errors["base"] = "database_error"
+                    else:
+                        if duplicates == len(inspection.rows):
+                            return self.async_abort(
+                                reason="legacy_import_no_new_data",
+                                description_placeholders={
+                                    "count": str(duplicates),
+                                },
+                            )
+                        self._legacy_import_rows: list[ImportedInterval] = (
+                            inspection.rows
+                        )
+                        self._legacy_import_empty_rows = inspection.empty_rows
+                        self._legacy_import_duplicates = duplicates
+                        return await self.async_step_confirm_legacy_import()
+
+        return self.async_show_form(
+            step_id="import_legacy_data",
+            data_schema=_legacy_import_schema(),
+            errors=errors,
+            description_placeholders={
+                "validation_errors": description_placeholders.get(
+                    "validation_errors", ""
+                )
+            },
+        )
+
+    async def async_step_confirm_legacy_import(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Show the import preview and import only after confirmation."""
+        if not hasattr(self, "_legacy_import_rows"):
+            return await self.async_step_import_legacy_data()
+
+        if user_input is not None:
+            try:
+                result: ImportResult = await self.hass.async_add_executor_job(
+                    import_excel, self._legacy_import_rows
+                )
+            except OSError, sqlite3.Error, ValueError:
+                errors = {"base": "database_error"}
+            else:
+                return self.async_abort(
+                    reason="legacy_import_complete",
+                    description_placeholders={
+                        "imported": str(result.imported),
+                        "skipped": str(result.skipped),
+                    },
+                )
+        else:
+            errors = {}
+
+        starts = [row.start for row in self._legacy_import_rows]
+        ends = [row.end for row in self._legacy_import_rows]
+        return self.async_show_form(
+            step_id="confirm_legacy_import",
+            errors=errors,
+            description_placeholders={
+                "valid_rows": str(len(self._legacy_import_rows)),
+                "new_rows": str(
+                    len(self._legacy_import_rows) - self._legacy_import_duplicates
+                ),
+                "duplicate_rows": str(self._legacy_import_duplicates),
+                "empty_rows": str(self._legacy_import_empty_rows),
+                "period_start": min(starts),
+                "period_end": max(ends),
+            },
         )
 
     async def async_step_configure_meter(
@@ -317,6 +432,17 @@ def _tariff_select_schema(tariffs: list[dict[str, Any]]) -> probatio.Schema:
                     ],
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
+            )
+        }
+    )
+
+
+def _legacy_import_schema() -> probatio.Schema:
+    """Build the Excel upload form schema."""
+    return probatio.Schema(
+        {
+            probatio.Required(CONF_EXCEL_FILE): selector.FileSelector(
+                config=selector.FileSelectorConfig(accept=".xlsx")
             )
         }
     )

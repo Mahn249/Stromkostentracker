@@ -17,9 +17,12 @@
       "invalid_tariff_period": "Das Enddatum muss am oder nach dem Startdatum liegen.",
       "meter_sensor_not_found": "Der ausgewählte Zählersensor ist nicht verfügbar.",
       "unsupported_meter_unit": "Wähle einen Sensor mit der Einheit W oder kWh.",
+      "invalid_excel_file": "Die hochgeladene Datei ist keine gültige Excel-Datei mit den erwarteten Spaltenüberschriften.",
+      "invalid_excel_data": "Die Tabelle enthält ungültige Daten. Korrigiere die angezeigten Zeilen und lade die Datei erneut hoch.",
       "duplicate_payment_name": "Ein Abschlag mit diesem Namen ist bereits vorhanden.",
       "overlapping_payment_period": "Dieser Abschlagszeitraum überschneidet sich mit einem anderen Zeitraum.",
-      "invalid_payment_period": "Das Enddatum muss am oder nach dem Startdatum liegen."
+      "invalid_payment_period": "Das Enddatum muss am oder nach dem Startdatum liegen.",
+      "database_error": "Die Datenbank konnte nicht gelesen oder aktualisiert werden."
     },
     "step": {
       "init": {
@@ -31,7 +34,8 @@
           "delete_tariff": "Tarifzeitraum löschen",
           "add_payment": "Abschlagszeitraum hinzufügen",
           "edit_payment": "Abschlagszeitraum bearbeiten",
-          "delete_payment": "Abschlagszeitraum löschen"
+          "delete_payment": "Abschlagszeitraum löschen",
+          "import_legacy_data": "Altdaten importieren"
         }
       },
       "configure_meter": {
@@ -104,11 +108,25 @@
       "confirm_delete_payment": {
         "title": "Abschlagszeitraum löschen",
         "description": "Soll dieser Abschlagszeitraum wirklich gelöscht werden?"
+      },
+      "import_legacy_data": {
+        "title": "Altdaten importieren",
+        "description": "Lade die .xlsx-Datei mit den erwarteten Spaltenüberschriften hoch. Home Assistant prüft sie zuerst; in diesem Schritt werden noch keine Daten importiert.\n\n{validation_errors}",
+        "data": {
+          "excel_file": "Excel-Datei (.xlsx)"
+        }
+      },
+      "confirm_legacy_import": {
+        "title": "Altdatenimport bestätigen",
+        "description": "Die Datei enthält {valid_rows} gültige Intervalle vom {period_start} bis {period_end}. {new_rows} scheinen neu zu sein, {duplicate_rows} sind bereits vorhanden oder doppeln sich in der Datei, {empty_rows} leere Zeilen werden ignoriert. Jetzt importieren?",
+        "submit": "Daten importieren"
       }
     },
     "abort": {
       "no_tariffs": "Es sind noch keine Tarifzeiträume gespeichert.",
-      "no_payments": "Es sind noch keine Abschlagszeiträume gespeichert."
+      "no_payments": "Es sind noch keine Abschlagszeiträume gespeichert.",
+      "legacy_import_no_new_data": "Keine neuen Daten zum Importieren: Alle {count} gültigen Intervalle sind bereits vorhanden oder in der Datei doppelt. Die Datenbank wurde nicht verändert.",
+      "legacy_import_complete": "Import abgeschlossen: {imported} Intervalle hinzugefügt, {skipped} übersprungen."
     }
   }
 }

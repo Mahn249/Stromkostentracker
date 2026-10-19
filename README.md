@@ -24,9 +24,7 @@ Nach einem Home-Assistant-Neustart beginnt ein neues Intervall ab dem Neustart; 
 
 ## Lovelace-Karte
 
-Die Karte fragt Monatsdaten über `stromkostentracker/month_data` und Jahresdaten über `stromkostentracker/year_data` ab.
-### Füge unter **Einstellungen → Dashboards → Ressourcen** die URL `/stromkostentracker_static/stromkostentracker-card.js` als JavaScript-Modul hinzu.
-Danach kannst du die Karte mit dem Typ `custom:stromkostentracker-card` in einem Dashboard verwenden. In der Monatsansicht werden tägliche Kosten und Tagesabschlag verglichen. In der Jahresansicht zeigt jeder Balken die Kosten eines Monats im Vergleich zum Monatsabschlag. Für den laufenden Monat werden Kosten und Abschlag bis heute verglichen; zukünftige Monate haben keine Verbrauchskosten.
+Die Karte fragt Monatsdaten über `stromkostentracker/month_data` und Jahresdaten über `stromkostentracker/year_data` ab. Solange die Integration eingerichtet ist, wird das Kartenmodul automatisch im Home-Assistant-Frontend geladen; ein manueller Ressourceneintrag ist nicht erforderlich. Füge die Karte im Dashboard-Editor über **Karte hinzufügen → Stromkostentracker** hinzu. In der Monatsansicht werden tägliche Kosten und Tagesabschlag verglichen. In der Jahresansicht zeigt jeder Balken die Kosten eines Monats im Vergleich zum Monatsabschlag. Für den laufenden Monat werden Kosten und Abschlag bis heute verglichen; zukünftige Monate haben keine Verbrauchskosten.
 
 Die Tarifverwaltung liest und ändert direkt die Tabellen in `energy_cost_tracker.db`. Die Datenbank wird in den Home-Assistant-Konfigurationsordner neben `configuration.yaml` abgelegt.
 
@@ -44,10 +42,10 @@ Alle User-Daten liegen in `energy_cost_tracker.db`. Die Datenbank enthält folge
 
 ## Import von historischen Daten
 
-Der Import erfolgt mit `imports/import_excel.py`. Dafür muss eine `historische_verbraeuche.xlsx` im beschriebenen Format vorliegen:
+Historische Messdaten lassen sich in den Optionen der Integration unter **Altdaten importieren** als `.xlsx`-Datei hochladen. Home Assistant prüft vor dem Import die Spaltenüberschriften und Messwerte, zeigt eine Vorschau mit Zeitraum und möglichen Duplikaten und importiert erst nach Bestätigung. Bei fehlerhaften Zeilen wird der gesamte Import gestoppt; korrigiere die Datei und lade sie erneut hoch.
 
 | Von (UTC nach ISO 8601) | Bis (UTC nach ISO 8601) | Zählerstand - Verbrauch (kWh) | Zählerstand - Einspeisung (kWh) | Delta (Verbrauch) in kWh | Anmerkung |
 | :--- | :--- | ---: | ---: | ---: | :--- |
 | 2025-07-25T00:00:00Z | 2025-07-25T00:14:59Z | 26087,284 | 275,367 | 0,135 | Abgelesen |
 
-Der Import kann im Anschluss mit `inspect_database.py` geprüft werden.
+Bereits vorhandene Intervalle mit derselben Quelle werden übersprungen.

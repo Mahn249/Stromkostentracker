@@ -15,9 +15,12 @@
       "invalid_tariff_period": "The end date must be on or after the start date.",
       "meter_sensor_not_found": "The selected meter sensor is not available.",
       "unsupported_meter_unit": "Select a sensor with a unit of W or kWh.",
+      "invalid_excel_file": "The uploaded file is not a valid Excel workbook with the expected columns.",
+      "invalid_excel_data": "The workbook contains invalid data. Correct the listed rows and upload it again.",
       "duplicate_payment_name": "A payment with this name already exists.",
       "overlapping_payment_period": "This payment period overlaps with another period.",
-      "invalid_payment_period": "The end date must be on or after the start date."
+      "invalid_payment_period": "The end date must be on or after the start date.",
+      "database_error": "The database could not be read or updated."
     },
     "step": {
       "init": {
@@ -29,7 +32,8 @@
           "delete_tariff": "Delete tariff period",
           "add_payment": "Add payment period",
           "edit_payment": "Edit payment period",
-          "delete_payment": "Delete payment period"
+          "delete_payment": "Delete payment period",
+          "import_legacy_data": "Import historical data"
         }
       },
       "configure_meter": {
@@ -102,11 +106,25 @@
       "confirm_delete_payment": {
         "title": "Delete payment period",
         "description": "Do you really want to delete this payment period?"
+      },
+      "import_legacy_data": {
+        "title": "Import historical data",
+        "description": "Upload the .xlsx workbook with the expected column headers. Home Assistant validates the file first; no data is imported at this step.\n\n{validation_errors}",
+        "data": {
+          "excel_file": "Excel workbook (.xlsx)"
+        }
+      },
+      "confirm_legacy_import": {
+        "title": "Confirm historical data import",
+        "description": "The workbook contains {valid_rows} valid intervals from {period_start} to {period_end}. {new_rows} appear to be new, {duplicate_rows} already exist or repeat in the workbook, and {empty_rows} empty rows will be ignored. Continue to import?",
+        "submit": "Import data"
       }
     },
     "abort": {
       "no_tariffs": "No tariff periods have been saved yet.",
-      "no_payments": "No payment periods have been saved yet."
+      "no_payments": "No payment periods have been saved yet.",
+      "legacy_import_no_new_data": "No new data to import: all {count} valid intervals already exist or are duplicated in the workbook. The database was not changed.",
+      "legacy_import_complete": "Import finished: {imported} intervals added and {skipped} skipped."
     }
   }
 }
