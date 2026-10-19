@@ -9,7 +9,23 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
-from .lovelace_api import get_month_data, get_year_data
+from .lovelace_api import get_available_years, get_month_data, get_year_data
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): "stromkostentracker/available_years",
+    }
+)
+@websocket_api.async_response
+async def websocket_get_available_years(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return years that contain meter interval data."""
+    years = await hass.async_add_executor_job(get_available_years)
+    connection.send_result(msg["id"], years)
 
 
 @websocket_api.websocket_command(

@@ -137,6 +137,24 @@ def _midnight_reading(
     )
 
 
+def get_available_years() -> list[int]:
+    """Return years that contain meter interval data, newest first."""
+    if not DATABASE_PATH.is_file():
+        raise FileNotFoundError(f"Datenbank nicht gefunden: {DATABASE_PATH}")
+
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        years = connection.execute("""
+            SELECT DISTINCT CAST(strftime('%Y', interval_start_utc) AS INTEGER)
+            FROM meter_intervals
+            WHERE strftime('%Y', interval_start_utc) IS NOT NULL
+              AND CAST(strftime('%Y', interval_start_utc) AS INTEGER)
+                  BETWEEN 1 AND 9998
+            ORDER BY 1 DESC
+        """).fetchall()
+
+    return [year for (year,) in years]
+
+
 def calculate_month_data(
     year: int,
     month: int,

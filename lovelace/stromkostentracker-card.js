@@ -9,6 +9,7 @@ class StromkostentrackerCard extends HTMLElement {
     this._loading = false;
     this._error = null;
     this._data = null;
+    this._availableYears = null;
   }
 
   setConfig(config) {
@@ -51,6 +52,21 @@ class StromkostentrackerCard extends HTMLElement {
     let data;
     let error;
     try {
+      if (this._availableYears === null) {
+        const availableYears = await this._hass.callWS({
+          type: "stromkostentracker/available_years",
+        });
+        if (requestId !== this._requestId) {
+          return;
+        }
+        this._availableYears = availableYears;
+        if (
+          availableYears.length &&
+          !availableYears.includes(this._year)
+        ) {
+          this._year = availableYears[0];
+        }
+      }
       data = await this._hass.callWS(
         this._view === "year"
           ? {
@@ -111,6 +127,9 @@ class StromkostentrackerCard extends HTMLElement {
       1,
     ).toLocaleDateString(language, { month: "long" });
     const yearView = this._view === "year";
+    const availableYears = this._availableYears?.length
+      ? this._availableYears
+      : [this._year];
     const now = new Date();
     const currentYear = this._data?.current_year || now.getFullYear();
     const currentMonth = this._data?.current_month || now.getMonth() + 1;
@@ -236,8 +255,7 @@ class StromkostentrackerCard extends HTMLElement {
         .title { font-size: 1.2em; font-weight: 500; }
         .selectors { gap: 8px; }
         .selectors select { max-width: 10em; }
-        select, input { color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 4px; padding: 6px; }
-        input { width: 5em; }
+        select { color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 4px; padding: 6px; }
         .summary { justify-content: space-around; gap: 12px; margin: 18px 0; text-align: center; }
         .summary-item { display: grid; gap: 4px; }
         .summary-label, .muted { color: var(--secondary-text-color); font-size: 0.9em; }
@@ -283,7 +301,14 @@ class StromkostentrackerCard extends HTMLElement {
                     }).join("")}
                   </select>`
             }
-            <input class="year" aria-label="Jahr" type="number" min="1" max="9998" value="${this._year}">
+            <select class="year" aria-label="Jahr" ${this._availableYears?.length === 0 ? "disabled" : ""}>
+              ${availableYears
+                .map(
+                  (year) =>
+                    `<option value="${year}" ${year === this._year ? "selected" : ""}>${year}</option>`,
+                )
+                .join("")}
+            </select>
           </div>
         </div>
         ${
@@ -323,7 +348,7 @@ class StromkostentrackerCard extends HTMLElement {
     });
     this.shadowRoot.querySelector(".year")?.addEventListener("change", (event) => {
       const year = Number(event.target.value);
-      if (Number.isInteger(year) && year >= 1 && year <= 9998) {
+      if (this._availableYears?.includes(year)) {
         this._year = year;
         this._loadData();
       }
