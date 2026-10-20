@@ -1,3 +1,9 @@
+# work in Progress
+- nach jedem Update muss das Frontend zwangsweisen neu geladen werden (manuell)
+- der Sensor "aktueller Arbeitspreis" wird nicht als Zahl für das Energy Dashboard erkannt
+- auf schmalen Bildschirmen passt die Lovelace Karte noch nicht ganz
+- Design der Karte ist noch nicht anpassbar
+
 # Stromkostentracker
 Datenbank zur Darstellung von historischen Tarifen, Abschlägen und Verbräuchen.
 Eine Custom Integration für Home Assistant zur Berechnung von Stromkosten auf Basis des täglichen Energieverbrauchs.
@@ -22,10 +28,11 @@ In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfiguri
 
 Nach einem Home-Assistant-Neustart beginnt ein neues Intervall ab dem Neustart; nicht beobachtete Leistung während der Ausfallzeit wird nicht geschätzt. Intervalle mit nicht verfügbaren Leistungswerten werden ausgelassen.
 
+Die Tarifverwaltung liest und ändert direkt die Tabellen in `energy_cost_tracker.db`. Die Datenbank wird in den Home-Assistant-Konfigurationsordner neben `configuration.yaml` abgelegt.
+
 ## Lovelace-Karte
  Solange die Integration eingerichtet ist, wird das Kartenmodul automatisch im Home-Assistant-Frontend geladen. Füge die Karte im Dashboard-Editor über **Karte hinzufügen → Stromkostentracker** hinzu. Ansicht, Monat und Jahr werden über Dropdown-Felder gewählt; im Jahres-Dropdown stehen die Jahre mit gespeicherten Messdaten zur Verfügung. In der Monatsansicht werden tägliche Kosten und Tagesabschlag verglichen. In der Jahresansicht zeigt jeder Balken die Kosten eines Monats im Vergleich zum Monatsabschlag. Für den laufenden Monat werden Kosten und Abschlag bis heute verglichen; zukünftige Monate haben keine Verbrauchskosten.
 
-Die Tarifverwaltung liest und ändert direkt die Tabellen in `energy_cost_tracker.db`. Die Datenbank wird in den Home-Assistant-Konfigurationsordner neben `configuration.yaml` abgelegt.
 
 # Datenstruktur
 Alle User-Daten liegen in `energy_cost_tracker.db`. Die Datenbank enthält folgende Tabellen:
