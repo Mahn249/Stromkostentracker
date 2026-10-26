@@ -7,17 +7,12 @@ import probatio
 
 from homeassistant import config_entries
 from homeassistant.components.file_upload import process_uploaded_file
-from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from . import payments as payment_store, tariffs as tariff_store
-from .const import (
-    CONF_INTERVAL_MINUTES,
-    CONF_METER_ENTITY,
-    DEFAULT_INTERVAL_MINUTES,
-    DOMAIN,
-)
+from .const import CONF_METER_ENTITY, DOMAIN, SIGNAL_TARIFFS_UPDATED
 from .imports.import_excel import ImportResult, count_existing_duplicates, import_excel
 from .imports.inspect_excel import (
     ExcelInspection,
@@ -25,6 +20,7 @@ from .imports.inspect_excel import (
     InvalidExcelFile,
     inspect_excel,
 )
+from .meter_writings import MeterSensorError, validate_meter_state
 
 CONF_EXCEL_FILE = "excel_file"
 
@@ -181,24 +177,24 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_configure_meter(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Configure the sensor and interval used for consumption recording."""
+        """Configure the sensor used for consumption recording."""
         errors: dict[str, str] = {}
         if user_input is not None:
             state = self.hass.states.get(user_input[CONF_METER_ENTITY])
             if state is None:
                 errors["base"] = "meter_sensor_not_found"
-            elif state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) not in (
-                UnitOfPower.WATT,
-                UnitOfEnergy.KILO_WATT_HOUR,
-            ):
-                errors["base"] = "unsupported_meter_unit"
             else:
-                options = {
-                    **self.config_entry.options,
-                    **user_input,
-                    CONF_INTERVAL_MINUTES: int(user_input[CONF_INTERVAL_MINUTES]),
-                }
-                return self.async_create_entry(title="", data=options)
+                try:
+                    validate_meter_state(state, user_input[CONF_METER_ENTITY])
+                except MeterSensorError:
+                    errors["base"] = "unsupported_meter_sensor"
+                else:
+                    options = {
+                        **self.config_entry.options,
+                        **user_input,
+                    }
+                    options.pop("interval_minutes", None)
+                    return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
             step_id="configure_meter",
@@ -324,6 +320,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             except OSError, sqlite3.Error:
                 errors["database_error"] = "database_error"
             else:
+                async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
                 return self.async_create_entry(title="", data=self.config_entry.options)
         return self.async_show_form(
             step_id="add_tariff", data_schema=_tariff_schema(), errors=errors
@@ -364,6 +361,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             except OSError, sqlite3.Error:
                 errors["database_error"] = "database_error"
             else:
+                async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
                 return self.async_create_entry(title="", data=self.config_entry.options)
         return self.async_show_form(
             step_id="edit_tariff_values",
@@ -403,6 +401,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             except OSError, sqlite3.Error:
                 errors["database_error"] = "database_error"
             else:
+                async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
                 return self.async_create_entry(title="", data=self.config_entry.options)
         return self.async_show_form(step_id="confirm_delete", errors=errors)
 
@@ -479,18 +478,14 @@ def _tariff_schema(tariff: dict[str, Any] | None = None) -> probatio.Schema:
 
 
 def _meter_schema(options: dict[str, Any]) -> probatio.Schema:
-    """Build the sensor and interval configuration schema."""
+    """Build the cumulative energy sensor configuration schema."""
     return probatio.Schema(
         {
             probatio.Required(
                 CONF_METER_ENTITY, default=options.get(CONF_METER_ENTITY)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
-            probatio.Required(
-                CONF_INTERVAL_MINUTES,
-                default=options.get(CONF_INTERVAL_MINUTES, DEFAULT_INTERVAL_MINUTES),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=1, max=1440, step=1, mode=selector.NumberSelectorMode.BOX
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    filter={"domain": "sensor", "device_class": "energy"}
                 )
             ),
         }

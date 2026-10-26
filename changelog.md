@@ -13,5 +13,10 @@ erste Alpha Verion zum live testen.
   - letzter gespeicherter Messpunkt (Zeitpunkt und Delta zum vorherigen Messpunkt)
   - Datenqualität ( längster Zeitrum zwischen einzelnen Checkpoints in den letzten 24h)
   - Zeitraum der Karte über [HA-Funktion, energy-Date-Picker](https://www.home-assistant.io/dashboards/energy/#energy-date-picker) anpassbar gestalten.
-  
 
+# Version 0.2.0
+- Die Verbrauchserfassung akzeptiert Energiesensoren mit Geräteklasse `energy` und Einheit `kWh`, unabhängig von der Zustandsklasse.
+- Messwert, Verbrauchsintervall und Checkpoint werden gemeinsam in einer SQLite-Transaktion gespeichert.
+- Fehlende, ungültige oder nicht rekonstruierbare Verbräuche bleiben unbekannt; Zählerwechsel erzeugen keine Differenz zwischen verschiedenen Entitäten.
+- Das Erfassungsintervall ist fest auf 10 Minuten gesetzt; die Option wurde aus den Einstellungen entfernt.
+- Tages- und Monatskosten verwenden dieselbe zeitanteilige Intervallaufteilung über lokale Tages-, Monats- und Tarifgrenzen; Grund- und Verbrauchskosten werden getrennt berechnet.

@@ -1,36 +1,49 @@
-"""Record consumption intervals from a Home Assistant sensor."""
+"""Record consumption intervals from a cumulative Home Assistant energy sensor."""
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from functools import partial
 import logging
 import math
 from pathlib import Path
 import sqlite3
 
-from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, UnitOfEnergy, UnitOfPower
-from homeassistant.core import (
-    CALLBACK_TYPE,
-    Event,
-    EventStateChangedData,
-    HomeAssistant,
-    State,
-    callback,
-)
-from homeassistant.helpers.event import (
-    async_track_state_change_event,
-    async_track_time_interval,
-)
+from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.const import ATTR_DEVICE_CLASS, ATTR_UNIT_OF_MEASUREMENT
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, State
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 DATABASE_PATH = Path(__file__).resolve().parents[2] / "energy_cost_tracker.db"
-_POWER_UNIT = UnitOfPower.WATT
-_ENERGY_UNIT = UnitOfEnergy.KILO_WATT_HOUR
+_ENERGY_UNIT = "kWh"
 
 
 class MeterSensorError(Exception):
     """Raised when the configured meter sensor is unsupported."""
+
+
+def validate_meter_state(state: State | None, entity_id: str) -> float:
+    """Return a valid cumulative kWh reading or raise a configuration error."""
+    if state is None:
+        raise MeterSensorError(f"Sensor {entity_id} is not available")
+    if (
+        state.attributes.get(ATTR_DEVICE_CLASS) != SensorDeviceClass.ENERGY
+        or state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) != _ENERGY_UNIT
+    ):
+        raise MeterSensorError(
+            f"Sensor {entity_id} must be an energy sensor in kWh"
+        )
+    try:
+        value = float(state.state)
+    except ValueError as err:
+        raise MeterSensorError(
+            f"Sensor {entity_id} has no numeric reading: {state.state}"
+        ) from err
+    if not math.isfinite(value) or value < 0:
+        raise MeterSensorError(
+            f"Sensor {entity_id} has an invalid cumulative reading: {state.state}"
+        )
+    return value
 
 
 def _ensure_meter_schema() -> None:
@@ -60,66 +73,89 @@ def _ensure_meter_schema() -> None:
                 "ALTER TABLE meter_intervals "
                 "ADD COLUMN consumption_meter_start_kwh REAL"
             )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS meter_checkpoint (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                entity_id TEXT NOT NULL,
+                value_kwh REAL NOT NULL,
+                timestamp_utc TEXT NOT NULL
+            )"""
+        )
 
 
-def _insert_interval(
-    *,
-    interval_start: datetime,
-    interval_end: datetime,
-    source: str,
-    consumption_delta_kwh: float,
-    meter_start_kwh: float | None = None,
-    meter_end_kwh: float | None = None,
-) -> None:
-    """Store one completed consumption interval."""
-    with sqlite3.connect(DATABASE_PATH) as connection:
+def _record_meter_reading(
+    entity_id: str, value_kwh: float, timestamp: datetime
+) -> bool:
+    """Atomically store one reading, its interval, and the latest checkpoint."""
+    if not math.isfinite(value_kwh) or value_kwh < 0:
+        raise ValueError("Cumulative meter readings must be finite and non-negative")
+
+    timestamp_utc = dt_util.as_utc(timestamp).isoformat()
+    with sqlite3.connect(DATABASE_PATH, timeout=30) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        checkpoint = connection.execute(
+            """SELECT entity_id, value_kwh, timestamp_utc
+               FROM meter_checkpoint WHERE id = 1"""
+        ).fetchone()
+
+        if checkpoint is not None and checkpoint[2] >= timestamp_utc:
+            return False
+
+        if checkpoint is not None and checkpoint[0] == entity_id:
+            previous_value = float(checkpoint[1])
+            interval_start = str(checkpoint[2])
+            start_value = previous_value
+            if value_kwh < previous_value:
+                _LOGGER.warning(
+                    "Cumulative energy sensor %s decreased; storing the new "
+                    "checkpoint with an unknown interval",
+                    entity_id,
+                )
+                delta_kwh = None
+            else:
+                delta_kwh = value_kwh - previous_value
+        else:
+            interval_start = (
+                str(checkpoint[2]) if checkpoint is not None else timestamp_utc
+            )
+            start_value = None
+            delta_kwh = None
+
         connection.execute(
             """INSERT INTO meter_intervals (
                    interval_start_utc, interval_end_utc,
-                   consumption_meter_kwh,
-                   consumption_meter_start_kwh,
+                   consumption_meter_kwh, consumption_meter_start_kwh,
                    consumption_delta_kwh, source
                ) VALUES (?, ?, ?, ?, ?, ?)""",
             (
-                dt_util.as_utc(interval_start).isoformat(),
-                dt_util.as_utc(interval_end).isoformat(),
-                meter_end_kwh,
-                meter_start_kwh,
-                consumption_delta_kwh,
-                source,
+                interval_start,
+                timestamp_utc,
+                value_kwh,
+                start_value,
+                delta_kwh,
+                entity_id,
             ),
         )
+        connection.execute(
+            """INSERT INTO meter_checkpoint (id, entity_id, value_kwh, timestamp_utc)
+               VALUES (1, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                   entity_id = excluded.entity_id,
+                   value_kwh = excluded.value_kwh,
+                   timestamp_utc = excluded.timestamp_utc""",
+            (entity_id, value_kwh, timestamp_utc),
+        )
+    return True
 
 
 @dataclass(repr=False)
 class MeterIntervalWriter:
-    """Collect one selected meter sensor and persist its periodic deltas."""
+    """Persist periodic readings from one cumulative energy sensor."""
 
     hass: HomeAssistant
     entity_id: str
     interval: timedelta
-    unit: str
-
-    interval_start: datetime = field(init=False)
-    last_sample_time: datetime = field(init=False)
-    meter_start_kwh: float | None = field(init=False)
-    last_power_w: float | None = field(init=False)
-    consumption_delta_kwh: float = field(init=False)
-    period_has_power_data: bool = field(init=False)
-    period_has_gap: bool = field(init=False)
     _unsubscribe_interval: CALLBACK_TYPE = field(init=False)
-    _unsubscribe_state: CALLBACK_TYPE | None = field(init=False)
-
-    def __post_init__(self) -> None:
-        """Initialize the interval state from the selected entity."""
-        self.interval_start = dt_util.utcnow()
-        self.last_sample_time = self.interval_start
-        self.meter_start_kwh: float | None = None
-        self.last_power_w: float | None = None
-        self.consumption_delta_kwh = 0.0
-        self.period_has_power_data = False
-        self.period_has_gap = False
-        self._set_baseline(self.hass.states.get(self.entity_id))
 
     @classmethod
     async def async_create(
@@ -129,188 +165,51 @@ class MeterIntervalWriter:
         interval: timedelta,
     ) -> MeterIntervalWriter:
         """Validate the selected sensor and prepare the database."""
-        state = hass.states.get(entity_id)
-        if state is None:
-            raise MeterSensorError(f"Sensor {entity_id} has no state")
-
-        unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
-        if unit not in (_POWER_UNIT, _ENERGY_UNIT):
-            raise MeterSensorError(
-                f"Sensor {entity_id} must use {_POWER_UNIT} or {_ENERGY_UNIT}; "
-                f"got {unit!r}"
-            )
-
+        initial_value = validate_meter_state(hass.states.get(entity_id), entity_id)
         await hass.async_add_executor_job(_ensure_meter_schema)
-        return cls(hass, entity_id, interval, unit)
+        await hass.async_add_executor_job(
+            _record_meter_reading, entity_id, initial_value, dt_util.utcnow()
+        )
+        return cls(hass, entity_id, interval)
 
     def async_start(self) -> None:
-        """Start sensor tracking and periodic interval writes."""
+        """Start periodic energy meter sampling."""
         self._unsubscribe_interval = async_track_time_interval(
             self.hass, self._async_finish_interval, self.interval
         )
-        self._unsubscribe_state = (
-            async_track_state_change_event(
-                self.hass, self.entity_id, self._async_handle_state_change
-            )
-            if self.unit == _POWER_UNIT
-            else None
-        )
 
     def async_stop(self) -> None:
-        """Stop interval and sensor state tracking."""
+        """Stop periodic energy meter sampling."""
         self._unsubscribe_interval()
-        if self._unsubscribe_state is not None:
-            self._unsubscribe_state()
-
-    @callback
-    def _set_baseline(self, state: State | None) -> None:
-        """Set the baseline from a currently available sensor state."""
-        if state is None:
-            self.period_has_gap = self.unit == _POWER_UNIT
-            return
-        value = self._numeric_value(state)
-        if value is None:
-            self.period_has_gap = self.unit == _POWER_UNIT
-            return
-        if self.unit == _POWER_UNIT:
-            self.last_power_w = value
-            self.period_has_power_data = True
-        else:
-            self.meter_start_kwh = value
-
-    @callback
-    def _numeric_value(self, state: State) -> float | None:
-        """Return a finite sensor reading, logging invalid states."""
-        if state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) != self.unit:
-            _LOGGER.error(
-                "Unit of %s changed from %s to %s; skipping its readings",
-                self.entity_id,
-                self.unit,
-                state.attributes.get(ATTR_UNIT_OF_MEASUREMENT),
-            )
-            return None
-        try:
-            value = float(state.state)
-        except ValueError:
-            _LOGGER.warning(
-                "Sensor %s has no numeric reading: %s", self.entity_id, state.state
-            )
-            return None
-        if not math.isfinite(value):
-            _LOGGER.warning(
-                "Sensor %s has a non-finite reading: %s",
-                self.entity_id,
-                state.state,
-            )
-            return None
-        return value
-
-    @callback
-    def _async_handle_state_change(self, event: Event[EventStateChangedData]) -> None:
-        """Integrate the prior power reading until the next state change."""
-        if event.data["entity_id"] != self.entity_id:
-            return
-        new_state: State | None = event.data["new_state"]
-        now = dt_util.utcnow()
-        self._integrate_power_until(now)
-        if new_state is None:
-            self.last_power_w = None
-            self.period_has_gap = True
-            return
-        self.last_power_w = self._numeric_value(new_state)
-        self.last_sample_time = now
-        if self.last_power_w is not None:
-            self.period_has_power_data = True
-        else:
-            self.period_has_gap = True
-
-    @callback
-    def _integrate_power_until(self, timestamp: datetime) -> None:
-        """Apply the left Riemann sum over the elapsed time."""
-        if self.last_power_w is not None:
-            elapsed_seconds = (timestamp - self.last_sample_time).total_seconds()
-            if elapsed_seconds > 0:
-                self.consumption_delta_kwh += (
-                    self.last_power_w * elapsed_seconds / 3_600_000
-                )
-        self.last_sample_time = timestamp
 
     async def _async_finish_interval(self, now: datetime) -> None:
-        """Store the completed period, then establish the next baseline."""
-        if self.unit == _POWER_UNIT:
-            self._integrate_power_until(now)
-            delta_kwh = self.consumption_delta_kwh
-            if self.period_has_power_data and not self.period_has_gap:
-                await self._async_write(now, delta_kwh)
-            else:
-                _LOGGER.warning(
-                    "Skipping incomplete consumption interval for %s",
-                    self.entity_id,
-                )
-            self.consumption_delta_kwh = 0.0
-            self.period_has_power_data = False
-            self.period_has_gap = False
-            state = self.hass.states.get(self.entity_id)
-            self.last_power_w = self._numeric_value(state) if state else None
-            self.period_has_power_data = self.last_power_w is not None
-            self.period_has_gap = self.last_power_w is None
-            self.last_sample_time = now
-        else:
-            await self._async_finish_meter_interval(now)
-        self.interval_start = now
-
-    async def _async_finish_meter_interval(self, now: datetime) -> None:
-        """Calculate and store the delta between cumulative meter readings."""
-        state = self.hass.states.get(self.entity_id)
-        meter_end_kwh = self._numeric_value(state) if state else None
-        meter_start_kwh = self.meter_start_kwh
-        if meter_start_kwh is not None and meter_end_kwh is not None:
-            delta_kwh = meter_end_kwh - meter_start_kwh
-            if delta_kwh >= 0:
-                await self._async_write(
-                    now,
-                    delta_kwh,
-                    meter_start_kwh=meter_start_kwh,
-                    meter_end_kwh=meter_end_kwh,
-                )
-            else:
-                _LOGGER.error(
-                    "Meter %s decreased from %.6f to %.6f kWh; skipping interval",
-                    self.entity_id,
-                    meter_start_kwh,
-                    meter_end_kwh,
-                )
-        else:
-            _LOGGER.warning(
-                "Skipping interval for %s because a meter reading is unavailable",
-                self.entity_id,
-            )
-        self.meter_start_kwh = meter_end_kwh
-
-    async def _async_write(
-        self,
-        now: datetime,
-        delta_kwh: float,
-        *,
-        meter_start_kwh: float | None = None,
-        meter_end_kwh: float | None = None,
-    ) -> None:
-        """Write one interval to SQLite without blocking the event loop."""
+        """Validate and atomically persist the latest cumulative reading."""
         try:
-            await self.hass.async_add_executor_job(
-                partial(
-                    _insert_interval,
-                    interval_start=self.interval_start,
-                    interval_end=now,
-                    source=self.entity_id,
-                    consumption_delta_kwh=delta_kwh,
-                    meter_start_kwh=meter_start_kwh,
-                    meter_end_kwh=meter_end_kwh,
-                )
+            value_kwh = validate_meter_state(
+                self.hass.states.get(self.entity_id), self.entity_id
+            )
+        except MeterSensorError as err:
+            _LOGGER.warning(
+                "Skipping invalid cumulative energy reading from %s: %s",
+                self.entity_id,
+                err,
+            )
+            return
+
+        try:
+            stored = await self.hass.async_add_executor_job(
+                _record_meter_reading, self.entity_id, value_kwh, now
             )
         except OSError, sqlite3.Error:
             _LOGGER.exception(
-                "Unable to write consumption interval for %s", self.entity_id
+                "Unable to store cumulative energy reading for %s",
+                self.entity_id,
+            )
+            return
+
+        if not stored:
+            _LOGGER.debug(
+                "Ignoring stale cumulative energy reading from %s", self.entity_id
             )
 
 

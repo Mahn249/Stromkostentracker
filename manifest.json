@@ -7,6 +7,6 @@
   "documentation": "https://github.com/Mahn249/Stromkostentracker",
   "iot_class": "calculated",
   "requirements": ["openpyxl==3.1.5"],
-  "version": "0.1.0",
+  "version": "0.2.0",
   "single_config_entry": true
 }

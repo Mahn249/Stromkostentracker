@@ -16,7 +16,7 @@
       "overlapping_tariff_period": "This period overlaps with another tariff period.",
       "invalid_tariff_period": "The end date must be on or after the start date.",
       "meter_sensor_not_found": "The selected meter sensor is not available.",
-      "unsupported_meter_unit": "Select a sensor with a unit of W or kWh.",
+      "unsupported_meter_sensor": "Select an energy sensor with device class energy and unit kWh.",
       "invalid_excel_file": "The uploaded file is not a valid Excel workbook with the expected columns.",
       "invalid_excel_data": "The workbook contains invalid data. Correct the listed rows and upload it again.",
       "duplicate_payment_name": "A payment with this name already exists.",
@@ -41,8 +41,7 @@
       "configure_meter": {
         "title": "Consumption recording",
         "data": {
-          "meter_entity": "Power or energy meter sensor",
-          "interval_minutes": "Recording interval (minutes)"
+          "meter_entity": "Cumulative energy meter sensor (kWh)"
         }
       },
       "add_tariff": {

@@ -9,6 +9,7 @@ from homeassistant import config_entries
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.update_coordinator import (
@@ -20,10 +21,10 @@ from homeassistant.util import dt as dt_util
 
 from . import tariffs
 from .const import (
-    CONF_INTERVAL_MINUTES,
     CONF_METER_ENTITY,
     DEFAULT_INTERVAL_MINUTES,
     DOMAIN,
+    SIGNAL_TARIFFS_UPDATED,
 )
 from .meter_writings import MeterSensorError, async_setup_meter_writer
 
@@ -58,11 +59,14 @@ async def async_setup_entry(
     """Set up the current work-price sensor."""
     coordinator = CurrentTariffCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_TARIFFS_UPDATED, coordinator.async_request_refresh
+        )
+    )
 
     if entity_id := entry.options.get(CONF_METER_ENTITY):
-        interval = timedelta(
-            minutes=entry.options.get(CONF_INTERVAL_MINUTES, DEFAULT_INTERVAL_MINUTES)
-        )
+        interval = timedelta(minutes=DEFAULT_INTERVAL_MINUTES)
         try:
             meter_writer = await async_setup_meter_writer(hass, entity_id, interval)
         except MeterSensorError as err:

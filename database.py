@@ -39,6 +39,14 @@ def initialize_database():
                 "ADD COLUMN consumption_meter_start_kwh REAL"
             )
         connection.execute("""
+            CREATE TABLE IF NOT EXISTS meter_checkpoint (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                entity_id TEXT NOT NULL,
+                value_kwh REAL NOT NULL,
+                timestamp_utc TEXT NOT NULL
+            )
+        """)
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS tariffs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,

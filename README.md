@@ -24,9 +24,9 @@ Die Integration liegt unter `custom_components/stromkostentracker`. Sie stellt i
 
 Der Sensor **Aktueller Arbeitspreis** stellt den Arbeitspreis des am heutigen lokalen Datum gültigen Tarifs in `EUR/kWh` bereit. Gibt es für heute keinen gültigen Tarif, ist sein Zustand `unknown`. Er wird beim Start, bei Tarifänderungen und um Mitternacht aktualisiert.
 
-In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfigurieren** einen Sensor mit der Einheit `W` oder `kWh` und ein Erfassungsintervall von 1 bis 1440 Minuten (-> Messperiode) wählen. Ein Leistungssensor mit der EInheit `W` wird anhand der linken Riemann-Summe integriert und in kWh umgerechnet; ein Energie-Sensor mit der EInheit `kWh` wird durch Differenz zwischen Anfangs- und Endzählerstand der Messperiode ausgewertet. Die Daten werden am Ende jedes Intervalls in die Tabelle `meter_intervals` der Datenbank geschrieben. Als `source` wird die `entity_id` des ausgewählten Sensors gespeichert. Bei Zählerstandssensoren enthält `consumption_meter_start_kwh` den Startwert und `consumption_meter_kwh` den Endwert des Intervalls.
+In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfigurieren** einen Energiesensor mit der Geräteklasse `energy` und der Einheit `kWh` wählen. Die Zustandsklasse ist nicht eingeschränkt. Leistungssensoren und Energiesensoren mit einer anderen Einheit werden nicht unterstützt. Der Zählerstand wird fest alle 10 Minuten erfasst. Bei jeder Erfassung werden der letzte Checkpoint, der neue Zählerstand, das Intervall und die Differenz in einer SQLite-Transaktion gemeinsam gespeichert. Ein erster Messwert, ein Wechsel der Entität und ein Zählerrückgang erhalten eine unbekannte Differenz (`NULL`); es wird keine Differenz zwischen verschiedenen Zählern oder über einen Zählerrückgang hinweg berechnet. Ungültige oder nicht verfügbare Messwerte werden nicht gespeichert und verändern den Checkpoint nicht.
 
-Nach einem Home-Assistant-Neustart beginnt ein neues Intervall ab dem Neustart; nicht beobachtete Leistung während der Ausfallzeit wird nicht geschätzt. Intervalle mit nicht verfügbaren Leistungswerten werden ausgelassen.
+Tages- und Monatskosten basieren auf denselben Intervallen. Intervalle, die lokale Mitternacht, Monats- oder Tarifgrenzen überqueren, werden nach ihrer verstrichenen UTC-Zeit aufgeteilt. Das setzt gleichmäßigen Verbrauch im Intervall voraus; es ist keine zusätzliche Messung. Der letzte Teil erhält den verbleibenden Anteil, damit die Teilmengen zusammen dem ursprünglichen Verbrauch entsprechen. Berechnungen verwenden Dezimalzahlen ohne Zwischenrundung. Grundkosten werden nach der bestehenden Regel als Monatsgrundpreis geteilt durch die Kalendertage des Monats berechnet, auch wenn Verbrauchsdaten fehlen. Bekannte Grund- und Verbrauchskosten werden getrennt ausgewiesen; bei Lücken bleibt der nicht rekonstruierbare Verbrauch unbekannt.
 
 Die Tarifverwaltung liest und ändert direkt die Tabellen in `energy_cost_tracker.db`. Die Datenbank wird in den Home-Assistant-Konfigurationsordner neben `configuration.yaml` abgelegt.
 
@@ -39,6 +39,10 @@ Alle User-Daten liegen in `energy_cost_tracker.db`. Die Datenbank enthält folge
 
 ## meter_intervals
 `[id, interval_start_utc, interval_end_utc, consumption_meter_kwh, feed_in_meter_kwh, consumption_delta_kwh, note, source, consumption_meter_start_kwh]`
+
+## meter_checkpoint
+Enthält den zuletzt transaktional gespeicherten Zählerstand und die zugehörige Entität:
+`[id, entity_id, value_kwh, timestamp_utc]`
 
 ## tariffs
 `[id, name, valid_from, valid_until, work_price_per_kwh, base_price_per_month]`

@@ -16,7 +16,7 @@
       "overlapping_tariff_period": "Dieser Zeitraum überschneidet sich mit einem anderen Tarifzeitraum.",
       "invalid_tariff_period": "Das Enddatum muss am oder nach dem Startdatum liegen.",
       "meter_sensor_not_found": "Der ausgewählte Zählersensor ist nicht verfügbar.",
-      "unsupported_meter_unit": "Wähle einen Sensor mit der Einheit W oder kWh.",
+      "unsupported_meter_sensor": "Wähle einen Energiesensor mit Geräteklasse energy und Einheit kWh.",
       "invalid_excel_file": "Die hochgeladene Datei ist keine gültige Excel-Datei mit den erwarteten Spaltenüberschriften.",
       "invalid_excel_data": "Die Tabelle enthält ungültige Daten. Korrigiere die angezeigten Zeilen und lade die Datei erneut hoch.",
       "duplicate_payment_name": "Ein Abschlag mit diesem Namen ist bereits vorhanden.",
@@ -41,8 +41,7 @@
       "configure_meter": {
         "title": "Verbrauchserfassung",
         "data": {
-          "meter_entity": "Leistungs- oder Zählerstandssensor",
-          "interval_minutes": "Erfassungsintervall (Minuten)"
+          "meter_entity": "Fortlaufender Energiesensor (kWh)"
         }
       },
       "add_tariff": {

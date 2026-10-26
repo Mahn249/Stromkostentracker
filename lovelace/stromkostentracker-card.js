@@ -121,44 +121,12 @@ class StromkostentrackerCard extends HTMLElement {
     }
 
     const language = this._hass?.language || undefined;
-    const monthName = new Date(
-      this._year,
-      this._month - 1,
-      1,
-    ).toLocaleDateString(language, { month: "long" });
     const yearView = this._view === "year";
     const availableYears = this._availableYears?.length
       ? this._availableYears
       : [this._year];
-    const now = new Date();
-    const currentYear = this._data?.current_year || now.getFullYear();
-    const currentMonth = this._data?.current_month || now.getMonth() + 1;
-    const isPastYear = this._year < currentYear;
+    const currentYear = this._data?.current_year || new Date().getFullYear();
     const isFutureYear = this._year > currentYear;
-    const isPastMonth =
-      this._year * 12 + this._month <
-      currentYear * 12 + currentMonth;
-    const costLabel = yearView
-      ? isPastYear
-        ? "Jahreskosten"
-        : "Kosten bis heute"
-      : isPastMonth
-        ? "Monatskosten"
-        : "Kosten bis heute";
-    const paymentLabel = yearView
-      ? isPastYear
-        ? "Jahresabschlag"
-        : "Abschlag bis heute"
-      : isPastMonth
-        ? "Monatsabschlag"
-        : "Abschlag bis heute";
-    const balanceLabel = yearView
-      ? isPastYear
-        ? "Jahressaldo"
-        : "Jahressaldo bis heute"
-      : isPastMonth
-        ? "Monatssaldo"
-        : "Differenz bis heute";
     const months = this._data?.months || [];
     const days = this._data?.days || [];
     const chartItems = yearView
@@ -182,15 +150,15 @@ class StromkostentrackerCard extends HTMLElement {
               monthData.costs_eur !== null &&
               payment !== null &&
               monthData.costs_eur > payment,
-            title: `${monthLabel} ${this._year}: ${this._formatEuro(monthData.costs_eur)} · ${this._formatEuro(payment)}`,
+            title: `${monthLabel} ${this._year}: bekannte Kosten ${this._formatEuro(monthData.costs_eur)} · ${this._formatEuro(payment)}`,
           };
         })
       : days.map((day) => ({
           label: Number(day.date.slice(-2)),
-          cost: day.total_cost_eur,
+          cost: day.known_cost_eur,
           payment: day.daily_payment_eur,
           overBudget: day.over_budget,
-          title: `${day.date}: ${this._formatEuro(day.total_cost_eur)}`,
+          title: `${day.date}: bekannte Kosten ${this._formatEuro(day.known_cost_eur)}`,
         }));
     const formatSummaryValue = (value) =>
       isFutureYear && yearView ? "–" : this._formatEuro(value);
@@ -255,6 +223,11 @@ class StromkostentrackerCard extends HTMLElement {
         .title { font-size: 1.2em; font-weight: 500; }
         .selectors { gap: 8px; }
         .selectors select { max-width: 10em; }
+        @media (max-width: 600px) {
+          .header { align-items: flex-start; flex-direction: column; }
+          .selectors { width: 100%; flex-wrap: wrap; }
+          .selectors select { flex: 1 1 0; min-width: 0; max-width: none; }
+        }
         select { color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 4px; padding: 6px; }
         .summary { justify-content: space-around; gap: 12px; margin: 18px 0; text-align: center; }
         .summary-item { display: grid; gap: 4px; }
@@ -266,9 +239,8 @@ class StromkostentrackerCard extends HTMLElement {
         .y-axis span:last-child { transform: translateY(50%); }
         .chart-viewport { flex: 1; min-width: 0; overflow-x: auto; }
         .chart { position: relative; display: flex; align-items: stretch; height: 228px; min-width: 100%; border-bottom: 1px solid var(--divider-color); }
-        .chart::before { position: absolute; top: 0; left: 0; right: 0; height: 210px; background: repeating-linear-gradient(to bottom, var(--divider-color) 0, var(--divider-color) 1px, transparent 1px, transparent 25%); content: ""; pointer-events: none; }
         .day-column { display: flex; flex: 1 0 18px; min-width: 18px; flex-direction: column; }
-        .plot { position: relative; flex: 0 0 210px; }
+        .plot { position: relative; flex: 0 0 210px; background: repeating-linear-gradient(to bottom, var(--divider-color) 0, var(--divider-color) 1px, transparent 1px, transparent 25%); }
         .bar { position: absolute; bottom: 0; width: 70%; left: 15%; background: var(--info-color, #03a9f4); border-radius: 3px 3px 0 0; }
         .bar.over-budget { background: var(--error-color, #db4437); }
         .allowance { position: absolute; left: 0; right: 0; border-top: 2px solid var(--warning-color, #f4b400); z-index: 1; }
@@ -319,17 +291,16 @@ class StromkostentrackerCard extends HTMLElement {
               : this._data
                 ? `
                   <div class="summary">
-                    <div class="summary-item"><span class="summary-label">${costLabel}</span><strong>${formatSummaryValue(this._data.costs_to_date_eur)}</strong></div>
-                    <div class="summary-item"><span class="summary-label">${paymentLabel}</span><strong>${formatSummaryValue(this._data.payment_to_date_eur)}</strong></div>
-                    <div class="summary-item"><span class="summary-label">${balanceLabel}</span><strong>${formatSummaryValue(this._data.balance_to_date_eur)}</strong></div>
+                    <div class="summary-item"><span class="summary-label">Kosten bis heute</span><strong>${formatSummaryValue(this._data.costs_to_date_eur)}</strong></div>
+                    <div class="summary-item"><span class="summary-label">Abschlag bis heute</span><strong>${formatSummaryValue(this._data.payment_to_date_eur)}</strong></div>
+                    <div class="summary-item"><span class="summary-label">Saldo offen</span><strong>${formatSummaryValue(this._data.balance_to_date_eur)}</strong></div>
                   </div>
-                  <div class="muted">${yearView ? `${this._year} · ${this._data.cost_days_count} Tage mit berechenbaren Kosten` : `${monthName} ${this._year} · ${this._data.cost_days_count} Tage mit berechenbaren Kosten`}</div>
                   <div class="chart-row">
                     <div class="y-axis">${axisLabels}</div>
                     <div class="chart-viewport"><div class="chart">${columns}</div></div>
                   </div>
                   <div class="legend">
-                    <span class="legend-item"><span class="swatch"></span>${yearView ? "Monatskosten" : "Tageskosten"}</span>
+                    <span class="legend-item"><span class="swatch"></span>${yearView ? "Bekannte Monatskosten" : "Bekannte Tageskosten"}</span>
                     <span class="legend-item"><span class="swatch over"></span>Über Abschlag</span>
                     <span class="legend-item"><span class="line-swatch"></span>${yearView ? "Monatsabschlag" : "Tagesabschlag"}</span>
                   </div>`
