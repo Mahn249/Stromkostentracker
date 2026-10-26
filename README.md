@@ -1,8 +1,5 @@
 # work in Progress
-- nach jedem Update muss das Frontend zwangsweisen neu geladen werden (manuell)
-- der Sensor "aktueller Arbeitspreis" wird nicht als Zahl für das Energy Dashboard erkannt
-- auf schmalen Bildschirmen passt die Lovelace Karte noch nicht ganz
-- Design der Karte ist noch nicht anpassbar
+- siehe changelog.md für Historie
 
 # Stromkostentracker
 Datenbank zur Darstellung von historischen Tarifen, Abschlägen und Verbräuchen.
@@ -22,9 +19,9 @@ Nach der Installation müssen Tarfie und Abschläge mit ihren entsprechenden Zei
 
 Die Integration liegt unter `custom_components/stromkostentracker`. Sie stellt in Home Assistant eine native Optionsverwaltung für Tarif- und Abschlagszeiträume bereit. Dort lassen sich Name, Gültigkeitsbeginn, optionales Gültigkeitsende und die jeweiligen Beträge hinzufügen, bearbeiten und löschen. Bei Abschlägen kann zusätzlich eine Anmerkung hinterlegt werden.
 
-Der Sensor **Aktueller Arbeitspreis** stellt den Arbeitspreis des am heutigen lokalen Datum gültigen Tarifs in `EUR/kWh` bereit. Gibt es für heute keinen gültigen Tarif, ist sein Zustand `unknown`. Er wird beim Start, bei Tarifänderungen und um Mitternacht aktualisiert.
+Der Sensor **Aktueller Arbeitspreis** stellt den Arbeitspreis des aktuell gültigen Tarifs in `EUR/kWh` bereit. Gibt es für heute keinen gültigen Tarif, ist sein Zustand `unknown`. Er wird beim Start, bei Tarifänderungen und um Mitternacht aktualisiert.
 
-In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfigurieren** einen Energiesensor mit der Geräteklasse `energy` und der Einheit `kWh` wählen. Die Zustandsklasse ist nicht eingeschränkt. Leistungssensoren und Energiesensoren mit einer anderen Einheit werden nicht unterstützt. Der Zählerstand wird fest alle 10 Minuten erfasst. Bei jeder Erfassung werden der letzte Checkpoint, der neue Zählerstand, das Intervall und die Differenz in einer SQLite-Transaktion gemeinsam gespeichert. Ein erster Messwert, ein Wechsel der Entität und ein Zählerrückgang erhalten eine unbekannte Differenz (`NULL`); es wird keine Differenz zwischen verschiedenen Zählern oder über einen Zählerrückgang hinweg berechnet. Ungültige oder nicht verfügbare Messwerte werden nicht gespeichert und verändern den Checkpoint nicht.
+In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfigurieren** einen Energiesensor mit der Geräteklasse `energy` und der Einheit `kWh` wählen. Leistungssensoren und Energiesensoren mit einer anderen Einheit werden nicht unterstützt. Der Zählerstand wird alle 10 Minuten erfasst. Bei jeder Erfassung werden der letzte Checkpoint, der neue Zählerstand, das Intervall und die Differenz in einer SQLite-Transaktion gemeinsam gespeichert. Ein erster Messwert, ein Wechsel der Entität und ein Zählerrückgang erhalten eine unbekannte Differenz (`NULL`); es wird keine Differenz zwischen verschiedenen Zählern oder über einen Zählerrückgang hinweg berechnet. Ungültige oder nicht verfügbare Messwerte werden nicht gespeichert und verändern den Checkpoint nicht.
 
 Tages- und Monatskosten basieren auf denselben Intervallen. Intervalle, die lokale Mitternacht, Monats- oder Tarifgrenzen überqueren, werden nach ihrer verstrichenen UTC-Zeit aufgeteilt. Das setzt gleichmäßigen Verbrauch im Intervall voraus; es ist keine zusätzliche Messung. Der letzte Teil erhält den verbleibenden Anteil, damit die Teilmengen zusammen dem ursprünglichen Verbrauch entsprechen. Berechnungen verwenden Dezimalzahlen ohne Zwischenrundung. Grundkosten werden nach der bestehenden Regel als Monatsgrundpreis geteilt durch die Kalendertage des Monats berechnet, auch wenn Verbrauchsdaten fehlen. Bekannte Grund- und Verbrauchskosten werden getrennt ausgewiesen; bei Lücken bleibt der nicht rekonstruierbare Verbrauch unbekannt.
 

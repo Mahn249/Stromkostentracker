@@ -6,8 +6,8 @@ import sqlite3
 from typing import Any
 
 from homeassistant import config_entries
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
-from homeassistant.core import HomeAssistant
+from homeassistant.components.sensor import RestoreSensor, SensorStateClass
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -86,7 +86,9 @@ async def async_setup_entry(
     async_add_entities([CurrentWorkPriceSensor(coordinator, entry)])
 
 
-class CurrentWorkPriceSensor(CoordinatorEntity[CurrentTariffCoordinator], SensorEntity):
+class CurrentWorkPriceSensor(
+    CoordinatorEntity[CurrentTariffCoordinator], RestoreSensor
+):
     """Show the work price for the tariff period valid today."""
 
     _attr_has_entity_name = True
@@ -102,10 +104,25 @@ class CurrentWorkPriceSensor(CoordinatorEntity[CurrentTariffCoordinator], Sensor
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_current_work_price"
+        self._attr_native_value: float | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last valid price when no tariff is currently available."""
+        await super().async_added_to_hass()
+        if (tariff := self.coordinator.data) is not None:
+            self._attr_native_value = float(tariff["work_price_per_kwh"])
+        elif (last_sensor_data := await self.async_get_last_sensor_data()) is not None:
+            if last_sensor_data.native_value is not None:
+                self._attr_native_value = float(last_sensor_data.native_value)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Keep the last valid price when the database has no current tariff."""
+        if (tariff := self.coordinator.data) is not None:
+            self._attr_native_value = float(tariff["work_price_per_kwh"])
+        super()._handle_coordinator_update()
 
     @property
     def native_value(self) -> float | None:
-        """Return the current work price, or None when no tariff is active."""
-        if (tariff := self.coordinator.data) is None:
-            return None
-        return float(tariff["work_price_per_kwh"])
+        """Return the latest valid work price."""
+        return self._attr_native_value

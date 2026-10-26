@@ -153,13 +153,27 @@ class StromkostentrackerCard extends HTMLElement {
             title: `${monthLabel} ${this._year}: bekannte Kosten ${this._formatEuro(monthData.costs_eur)} · ${this._formatEuro(payment)}`,
           };
         })
-      : days.map((day) => ({
-          label: Number(day.date.slice(-2)),
-          cost: day.known_cost_eur,
-          payment: day.daily_payment_eur,
-          overBudget: day.over_budget,
-          title: `${day.date}: bekannte Kosten ${this._formatEuro(day.known_cost_eur)}`,
-        }));
+      : days.map((day) => {
+          const knownCost =
+            day.known_cost_eur ??
+            (day.base_cost_eur !== undefined ||
+            day.work_cost_eur !== undefined
+              ? (day.base_cost_eur ?? 0) + (day.work_cost_eur ?? 0)
+              : day.total_cost_eur);
+          return {
+            label: Number(day.date.slice(-2)),
+            cost: knownCost,
+            payment: day.daily_payment_eur,
+            overBudget:
+              day.over_budget ??
+              (day.daily_payment_eur !== null &&
+                day.daily_payment_eur !== undefined &&
+                knownCost !== null &&
+                knownCost !== undefined &&
+                knownCost > day.daily_payment_eur),
+            title: `${day.date}: bekannte Kosten ${this._formatEuro(knownCost)}`,
+          };
+        });
     const formatSummaryValue = (value) =>
       isFutureYear && yearView ? "–" : this._formatEuro(value);
     const maxValue = Math.max(
