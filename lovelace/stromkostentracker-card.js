@@ -129,6 +129,9 @@ class StromkostentrackerCard extends HTMLElement {
     const isFutureYear = this._year > currentYear;
     const months = this._data?.months || [];
     const days = this._data?.days || [];
+    const visibleDays = days.filter(
+      (day) => day.date <= this._data.current_date,
+    );
     const chartItems = yearView
       ? months.map((monthData) => {
           const isCurrentMonth =
@@ -153,24 +156,13 @@ class StromkostentrackerCard extends HTMLElement {
             title: `${monthLabel} ${this._year}: bekannte Kosten ${this._formatEuro(monthData.costs_eur)} · ${this._formatEuro(payment)}`,
           };
         })
-      : days.map((day) => {
-          const knownCost =
-            day.known_cost_eur ??
-            (day.base_cost_eur !== undefined ||
-            day.work_cost_eur !== undefined
-              ? (day.base_cost_eur ?? 0) + (day.work_cost_eur ?? 0)
-              : day.total_cost_eur);
+      : visibleDays.map((day) => {
+          const knownCost = day.known_cost_eur;
           return {
             label: Number(day.date.slice(-2)),
             cost: knownCost,
             payment: day.daily_payment_eur,
-            overBudget:
-              day.over_budget ??
-              (day.daily_payment_eur !== null &&
-                day.daily_payment_eur !== undefined &&
-                knownCost !== null &&
-                knownCost !== undefined &&
-                knownCost > day.daily_payment_eur),
+            overBudget: day.over_budget,
             title: `${day.date}: bekannte Kosten ${this._formatEuro(knownCost)}`,
           };
         });
@@ -341,11 +333,17 @@ class StromkostentrackerCard extends HTMLElement {
   }
 }
 
-customElements.define("stromkostentracker-card", StromkostentrackerCard);
+const CARD_TYPE = "stromkostentracker-card";
+
+if (!customElements.get(CARD_TYPE)) {
+  customElements.define(CARD_TYPE, StromkostentrackerCard);
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "stromkostentracker-card",
-  name: "Stromkostentracker",
-  description: "Vergleicht tägliche Stromkosten mit dem Abschlag.",
-});
+if (!window.customCards.some((card) => card.type === CARD_TYPE)) {
+  window.customCards.push({
+    type: CARD_TYPE,
+    name: "Stromkostentracker",
+    description: "Vergleicht tägliche Stromkosten mit dem Abschlag.",
+  });
+}

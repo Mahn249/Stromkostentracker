@@ -40,6 +40,68 @@ def test_get_available_years_returns_years_with_intervals(
     assert lovelace_api.get_available_years() == [2025, 2024]
 
 
+def test_read_month_data_uses_current_meter_interval_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Month data reads the current meter interval fields from the database."""
+    database_path = tmp_path / "meter.db"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("""
+            CREATE TABLE meter_intervals (
+                interval_start_utc TEXT NOT NULL,
+                interval_end_utc TEXT NOT NULL,
+                consumption_meter_kwh REAL,
+                consumption_meter_start_kwh REAL,
+                consumption_delta_kwh REAL,
+                source TEXT NOT NULL
+            )
+        """)
+        connection.execute(
+            """
+            INSERT INTO meter_intervals (
+                interval_start_utc, interval_end_utc, consumption_meter_kwh,
+                consumption_meter_start_kwh, consumption_delta_kwh, source
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "2026-10-01T00:00:00+00:00",
+                "2026-10-02T00:00:00+00:00",
+                101,
+                100,
+                1,
+                "sensor.energy",
+            ),
+        )
+        connection.execute("""
+            CREATE TABLE tariffs (
+                valid_from TEXT,
+                valid_until TEXT,
+                work_price_per_kwh REAL,
+                base_price_per_month REAL
+            )
+        """)
+        connection.execute("""
+            CREATE TABLE payments (
+                valid_from TEXT,
+                valid_until TEXT,
+                amount_eur REAL
+            )
+        """)
+
+    monkeypatch.setattr(lovelace_api, "DATABASE_PATH", database_path)
+    monkeypatch.setattr(
+        lovelace_api.dt_util,
+        "now",
+        lambda: datetime(2026, 10, 1, 12, tzinfo=UTC),
+    )
+
+    result = lovelace_api.get_month_data(2026, 10, UTC)
+
+    assert result["current_date"] == "2026-10-01"
+    assert result["days"][0]["consumption_kwh"] == 1
+    assert result["days"][0]["consumption_source"] == "intervals"
+
+
 def test_calculate_month_data_keeps_days_with_unknown_intervals_unknown() -> None:
     """A partial sum cannot hide an unknown quantity within that day."""
     day = date(2026, 10, 26)

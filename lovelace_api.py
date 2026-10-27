@@ -28,32 +28,16 @@ def _read_month_data(
 
     with sqlite3.connect(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
-        columns = {
-            row["name"]
-            for row in connection.execute("PRAGMA table_info(meter_intervals)")
-        }
-        if "consumption_meter_start_kwh" in columns:
-            interval_query = """SELECT interval_start_utc, interval_end_utc,
-                                       consumption_meter_kwh,
-                                       consumption_meter_start_kwh,
-                                       consumption_delta_kwh, source
-                                FROM meter_intervals
-                                WHERE datetime(interval_start_utc) < datetime(?)
-                                  AND datetime(interval_end_utc) > datetime(?)
-                                ORDER BY interval_start_utc"""
-        else:
-            interval_query = """SELECT interval_start_utc, interval_end_utc,
-                                       consumption_meter_kwh,
-                                       NULL AS consumption_meter_start_kwh,
-                                       consumption_delta_kwh, source
-                                FROM meter_intervals
-                                WHERE datetime(interval_start_utc) < datetime(?)
-                                  AND datetime(interval_end_utc) > datetime(?)
-                                ORDER BY interval_start_utc"""
         intervals = [
             dict(row)
             for row in connection.execute(
-                interval_query,
+                """SELECT interval_start_utc, interval_end_utc,
+                          consumption_meter_kwh, consumption_meter_start_kwh,
+                          consumption_delta_kwh, source
+                   FROM meter_intervals
+                   WHERE datetime(interval_start_utc) < datetime(?)
+                     AND datetime(interval_end_utc) > datetime(?)
+                   ORDER BY interval_start_utc""",
                 (query_end, query_start),
             ).fetchall()
         ]
@@ -352,6 +336,7 @@ def _calculate_month_data(
         "month": month,
         "current_year": today.year,
         "current_month": today.month,
+        "current_date": today.isoformat(),
         "days": days,
         "payment_to_date_eur": payment_to_date,
         "base_costs_to_date_eur": base_costs_to_date,

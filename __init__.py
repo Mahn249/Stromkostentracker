@@ -1,6 +1,5 @@
 """Stromkostentracker Home Assistant integration."""
 
-from functools import partial
 import hashlib
 from pathlib import Path
 
@@ -11,7 +10,6 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
 from .database import initialize_database
 from .websocket import (
     websocket_get_available_years,
@@ -21,7 +19,6 @@ from .websocket import (
 
 LOVELACE_CARD_PATH = "/stromkostentracker_static/stromkostentracker-card.js"
 LOVELACE_CARD_FILE = Path(__file__).parent / "lovelace" / "stromkostentracker-card.js"
-DATA_LOVELACE_CARD_URL = f"{DOMAIN}_lovelace_card_url"
 PLATFORMS = [Platform.SENSOR]
 
 
@@ -33,7 +30,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     card_hash = await hass.async_add_executor_job(
         lambda: hashlib.sha256(LOVELACE_CARD_FILE.read_bytes()).hexdigest()[:12]
     )
-    hass.data[DATA_LOVELACE_CARD_URL] = f"{LOVELACE_CARD_PATH}?v={card_hash}"
+    card_url = f"{LOVELACE_CARD_PATH}?v={card_hash}"
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
@@ -43,6 +40,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             )
         ]
     )
+    frontend.add_extra_js_url(hass, card_url)
     return True
 
 
@@ -50,9 +48,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the integration from a config entry."""
     await hass.async_add_executor_job(initialize_database)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
-    card_url = hass.data[DATA_LOVELACE_CARD_URL]
-    frontend.add_extra_js_url(hass, card_url)
-    entry.async_on_unload(partial(frontend.remove_extra_js_url, hass, card_url))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
