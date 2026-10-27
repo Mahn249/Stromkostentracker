@@ -129,8 +129,12 @@ class StromkostentrackerCard extends HTMLElement {
     const isFutureYear = this._year > currentYear;
     const months = this._data?.months || [];
     const days = this._data?.days || [];
+    const now = new Date();
+    const currentDate =
+      this._data?.current_date ||
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const visibleDays = days.filter(
-      (day) => day.date <= this._data.current_date,
+      (day) => day.date <= currentDate,
     );
     const chartItems = yearView
       ? months.map((monthData) => {
