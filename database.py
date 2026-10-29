@@ -6,8 +6,8 @@ import sqlite3
 DATABASE_PATH = Path(__file__).resolve().parents[2] / "energy_cost_tracker.db"
 
 
-def initialize_database():
-    """Erstellt die Datenbank und ihre Tabellen, falls nötig."""
+def initialize_database() -> None:
+    """Create the integration tables for a fresh database."""
 
     with sqlite3.connect(DATABASE_PATH) as connection:
         connection.execute("""
@@ -17,33 +17,7 @@ def initialize_database():
                 interval_end_utc TEXT NOT NULL,
                 consumption_meter_kwh REAL,
                 consumption_meter_start_kwh REAL,
-                feed_in_meter_kwh REAL,
-                consumption_delta_kwh REAL,
-                note TEXT,
-                source TEXT NOT NULL DEFAULT 'unknown',
-
-                UNIQUE (
-                    interval_start_utc,
-                    interval_end_utc,
-                    source
-                )
-            )
-        """)
-
-        columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(meter_intervals)")
-        }
-        if "consumption_meter_start_kwh" not in columns:
-            connection.execute(
-                "ALTER TABLE meter_intervals "
-                "ADD COLUMN consumption_meter_start_kwh REAL"
-            )
-        connection.execute("""
-            CREATE TABLE IF NOT EXISTS meter_checkpoint (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                entity_id TEXT NOT NULL,
-                value_kwh REAL NOT NULL,
-                timestamp_utc TEXT NOT NULL
+                note TEXT
             )
         """)
         connection.execute("""

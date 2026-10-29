@@ -15,7 +15,6 @@ EXPECTED_HEADERS = (
     "Von (UTC nach ISO 8601)",
     "Bis (UTC nach ISO 8601)",
     "Zählerstand - Verbrauch (kWh)",
-    "Zählerstand - Einspeisung (kWh)",
     "Delta (Verbrauch) in kWh",
     "Anmerkung",
 )
@@ -28,7 +27,6 @@ class ImportedInterval:
     start: str
     end: str
     consumption: float
-    feed_in: float | None
     delta: float
     note: str | None
 
@@ -79,13 +77,6 @@ def _parse_number(value: object, column: str) -> float:
     return result
 
 
-def _parse_optional_number(value: object, column: str) -> float | None:
-    """Parse an optional finite numeric cell."""
-    if value is None or (isinstance(value, str) and not value.strip()):
-        return None
-    return _parse_number(value, column)
-
-
 def _parse_row(row: tuple[object, ...]) -> ImportedInterval:
     """Validate and normalize one data row."""
     if any(value is not None for value in row[len(EXPECTED_HEADERS) :]):
@@ -97,13 +88,22 @@ def _parse_row(row: tuple[object, ...]) -> ImportedInterval:
     end = _parse_timestamp(values[1])
     if end <= start:
         raise ValueError("Intervallende muss nach dem Intervallbeginn liegen")
+    consumption = _parse_number(values[2], EXPECTED_HEADERS[2])
+    delta = _parse_number(values[3], EXPECTED_HEADERS[3])
+    if consumption < 0:
+        raise ValueError(f"{EXPECTED_HEADERS[2]} darf nicht negativ sein")
+    if delta < 0:
+        raise ValueError(f"{EXPECTED_HEADERS[3]} darf nicht negativ sein")
+    if delta > consumption:
+        raise ValueError(
+            f"{EXPECTED_HEADERS[3]} darf den Zählerstand nicht überschreiten"
+        )
     return ImportedInterval(
         start=start.isoformat(),
         end=end.isoformat(),
-        consumption=_parse_number(values[2], EXPECTED_HEADERS[2]),
-        feed_in=_parse_optional_number(values[3], EXPECTED_HEADERS[3]),
-        delta=_parse_number(values[4], EXPECTED_HEADERS[4]),
-        note=str(values[5]) if values[5] is not None else None,
+        consumption=consumption,
+        delta=delta,
+        note=str(values[4]) if values[4] is not None else None,
     )
 
 

@@ -193,7 +193,6 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                         **self.config_entry.options,
                         **user_input,
                     }
-                    options.pop("interval_minutes", None)
                     return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
@@ -318,7 +317,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             except tariff_store.TariffValidationError as exc:
                 errors["base"] = exc.reason
             except OSError, sqlite3.Error:
-                errors["database_error"] = "database_error"
+                errors["base"] = "database_error"
             else:
                 async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
                 return self.async_create_entry(title="", data=self.config_entry.options)
@@ -359,7 +358,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             except tariff_store.TariffValidationError as exc:
                 errors["base"] = exc.reason
             except OSError, sqlite3.Error:
-                errors["database_error"] = "database_error"
+                errors["base"] = "database_error"
             else:
                 async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
                 return self.async_create_entry(title="", data=self.config_entry.options)
@@ -399,7 +398,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                     tariff_store.delete_tariff, self._selected_id
                 )
             except OSError, sqlite3.Error:
-                errors["database_error"] = "database_error"
+                errors["base"] = "database_error"
             else:
                 async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
                 return self.async_create_entry(title="", data=self.config_entry.options)

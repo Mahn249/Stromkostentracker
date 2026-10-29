@@ -52,23 +52,21 @@ def test_read_month_data_uses_current_meter_interval_schema(
                 interval_end_utc TEXT NOT NULL,
                 consumption_meter_kwh REAL,
                 consumption_meter_start_kwh REAL,
-                consumption_delta_kwh REAL,
-                source TEXT NOT NULL
+                note TEXT
             )
         """)
         connection.execute(
             """
             INSERT INTO meter_intervals (
                 interval_start_utc, interval_end_utc, consumption_meter_kwh,
-                consumption_meter_start_kwh, consumption_delta_kwh, source
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                consumption_meter_start_kwh, note
+            ) VALUES (?, ?, ?, ?, ?)
             """,
             (
                 "2026-10-01T00:00:00+00:00",
                 "2026-10-02T00:00:00+00:00",
                 101,
                 100,
-                1,
                 "sensor.energy",
             ),
         )
@@ -112,24 +110,21 @@ def test_calculate_month_data_keeps_days_with_unknown_intervals_unknown() -> Non
             "interval_end_utc": "2026-10-26T10:00:00+00:00",
             "consumption_meter_start_kwh": 100,
             "consumption_meter_kwh": 110,
-            "consumption_delta_kwh": 10,
-            "source": "sensor.energy",
+            "note": "sensor.energy",
         },
         {
             "interval_start_utc": "2026-10-26T10:00:00+00:00",
             "interval_end_utc": "2026-10-26T11:00:00+00:00",
-            "consumption_meter_start_kwh": 110,
+            "consumption_meter_start_kwh": None,
             "consumption_meter_kwh": 111,
-            "consumption_delta_kwh": None,
-            "source": "sensor.energy",
+            "note": "sensor.energy",
         },
         {
             "interval_start_utc": "2026-10-26T11:00:00+00:00",
             "interval_end_utc": f"{next_day.isoformat()}T00:00:00+00:00",
             "consumption_meter_start_kwh": 111,
             "consumption_meter_kwh": 200,
-            "consumption_delta_kwh": 89,
-            "source": "sensor.energy",
+            "note": "sensor.energy",
         },
     ]
 
@@ -162,6 +157,39 @@ def test_calculate_month_data_keeps_days_with_unknown_intervals_unknown() -> Non
     assert result["days"][25]["total_cost_eur"] is None
     assert result["days"][25]["over_budget"]
     assert result["balance_to_date_eur"] < 0
+
+
+def test_calculate_month_data_treats_decreasing_meter_reading_as_unknown() -> None:
+    """A reset or decreasing cumulative reading is not charged as negative use."""
+    result = lovelace_api.calculate_month_data(
+        2026,
+        10,
+        [
+            {
+                "interval_start_utc": "2026-10-01T00:00:00+00:00",
+                "interval_end_utc": "2026-10-02T00:00:00+00:00",
+                "consumption_meter_start_kwh": 12,
+                "consumption_meter_kwh": 3,
+                "note": "sensor.energy",
+            }
+        ],
+        [
+            {
+                "valid_from": "2026-10-01",
+                "valid_until": None,
+                "work_price_per_kwh": 0.1,
+                "base_price_per_month": 0,
+            }
+        ],
+        [],
+        now=datetime(2026, 10, 2, tzinfo=UTC),
+        local_timezone=UTC,
+    )
+
+    assert result["days"][0]["consumption_kwh"] is None
+    assert result["days"][0]["known_consumption_kwh"] is None
+    assert not result["days"][0]["consumption_complete"]
+    assert result["days"][0]["work_cost_eur"] is None
 
 
 def test_split_interval_by_local_midnight_conserves_consumption() -> None:
@@ -202,14 +230,16 @@ def test_daily_costs_split_at_month_and_tariff_boundaries() -> None:
     interval = {
         "interval_start_utc": "2026-10-31T23:30:00+00:00",
         "interval_end_utc": "2026-11-01T00:30:00+00:00",
-        "consumption_delta_kwh": 2,
-        "source": "sensor.energy",
+        "consumption_meter_start_kwh": 100,
+        "consumption_meter_kwh": 102,
+        "note": "sensor.energy",
     }
     tariff_interval = {
         "interval_start_utc": "2026-10-15T23:30:00+00:00",
         "interval_end_utc": "2026-10-16T00:30:00+00:00",
-        "consumption_delta_kwh": 2,
-        "source": "sensor.energy",
+        "consumption_meter_start_kwh": 200,
+        "consumption_meter_kwh": 202,
+        "note": "sensor.energy",
     }
     tariffs = [
         {
@@ -314,8 +344,9 @@ def test_work_costs_keep_sub_cent_precision_until_output() -> None:
             {
                 "interval_start_utc": "2026-10-01T00:00:00+00:00",
                 "interval_end_utc": "2026-10-02T00:00:00+00:00",
-                "consumption_delta_kwh": 0.123456,
-                "source": "sensor.energy",
+                "consumption_meter_start_kwh": 0,
+                "consumption_meter_kwh": 0.123456,
+                "note": "sensor.energy",
             }
         ],
         [

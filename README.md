@@ -21,7 +21,7 @@ Die Integration liegt unter `custom_components/stromkostentracker`. Sie stellt i
 
 Der Sensor **Aktueller Arbeitspreis** stellt den Arbeitspreis des aktuell gültigen Tarifs in `EUR/kWh` bereit. Gibt es für heute keinen gültigen Tarif, ist sein Zustand `unknown`. Er wird beim Start, bei Tarifänderungen und um Mitternacht aktualisiert.
 
-In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfigurieren** einen Energiesensor mit der Geräteklasse `energy` und der Einheit `kWh` wählen. Leistungssensoren und Energiesensoren mit einer anderen Einheit werden nicht unterstützt. Der Zählerstand wird alle 10 Minuten erfasst. Bei jeder Erfassung werden der letzte Checkpoint, der neue Zählerstand, das Intervall und die Differenz in einer SQLite-Transaktion gemeinsam gespeichert. Ein erster Messwert, ein Wechsel der Entität und ein Zählerrückgang erhalten eine unbekannte Differenz (`NULL`); es wird keine Differenz zwischen verschiedenen Zählern oder über einen Zählerrückgang hinweg berechnet. Ungültige oder nicht verfügbare Messwerte werden nicht gespeichert und verändern den Checkpoint nicht.
+In den Integrationseinstellungen kannst du unter **Verbrauchserfassung konfigurieren** einen Energiesensor mit der Geräteklasse `energy` und der Einheit `kWh` wählen. Leistungssensoren und Energiesensoren mit einer anderen Einheit werden nicht unterstützt. Der Zählerstand wird alle 10 Minuten erfasst. Der Zählerstand am Intervallende und der vorherige Stand desselben Sensors werden in `meter_intervals` gespeichert. Der erste Messpunkt eines Sensors hat keinen Startzählerstand; rückläufige Zählerstände ergeben in der Lovelace-Berechnung einen unbekannten Verbrauch. Ungültige oder nicht verfügbare Messwerte werden nicht gespeichert.
 
 Tages- und Monatskosten basieren auf denselben Intervallen. Intervalle, die lokale Mitternacht, Monats- oder Tarifgrenzen überqueren, werden nach ihrer verstrichenen UTC-Zeit aufgeteilt. Das setzt gleichmäßigen Verbrauch im Intervall voraus; es ist keine zusätzliche Messung. Der letzte Teil erhält den verbleibenden Anteil, damit die Teilmengen zusammen dem ursprünglichen Verbrauch entsprechen. Berechnungen verwenden Dezimalzahlen ohne Zwischenrundung. Grundkosten werden nach der bestehenden Regel als Monatsgrundpreis geteilt durch die Kalendertage des Monats berechnet, auch wenn Verbrauchsdaten fehlen. Bekannte Grund- und Verbrauchskosten werden getrennt ausgewiesen; bei Lücken bleibt der nicht rekonstruierbare Verbrauch unbekannt.
 
@@ -35,11 +35,7 @@ Die Tarifverwaltung liest und ändert direkt die Tabellen in `energy_cost_tracke
 Alle User-Daten liegen in `energy_cost_tracker.db`. Die Datenbank enthält folgende Tabellen:
 
 ## meter_intervals
-`[id, interval_start_utc, interval_end_utc, consumption_meter_kwh, feed_in_meter_kwh, consumption_delta_kwh, note, source, consumption_meter_start_kwh]`
-
-## meter_checkpoint
-Enthält den zuletzt transaktional gespeicherten Zählerstand und die zugehörige Entität:
-`[id, entity_id, value_kwh, timestamp_utc]`
+`[id, interval_start_utc, interval_end_utc, consumption_meter_kwh, consumption_meter_start_kwh, note]`
 
 ## tariffs
 `[id, name, valid_from, valid_until, work_price_per_kwh, base_price_per_month]`
@@ -51,8 +47,12 @@ Enthält den zuletzt transaktional gespeicherten Zählerstand und die zugehörig
 
 Historische Messdaten lassen sich in den Optionen der Integration unter **Altdaten importieren** als `.xlsx`-Datei hochladen. Home Assistant prüft vor dem Import die Spaltenüberschriften und Messwerte, zeigt eine Vorschau mit Zeitraum und möglichen Duplikaten und importiert erst nach Bestätigung. Bei fehlerhaften Zeilen wird der gesamte Import gestoppt; korrigiere die Datei und lade sie erneut hoch.
 
-| Von (UTC nach ISO 8601) | Bis (UTC nach ISO 8601) | Zählerstand - Verbrauch (kWh) | Zählerstand - Einspeisung (kWh) | Delta (Verbrauch) in kWh | Anmerkung |
-| :--- | :--- | ---: | ---: | ---: | :--- |
-| 2025-07-25T00:00:00Z | 2025-07-25T00:14:59Z | 26087,284 | 275,367 | 0,135 | Abgelesen |
+| Von (UTC nach ISO 8601) | Bis (UTC nach ISO 8601) | Zählerstand - Verbrauch (kWh) | Delta (Verbrauch) in kWh | Anmerkung |
+| :--- | :--- | ---: | ---: | :--- |
+| 2025-07-25T00:00:00Z | 2025-07-25T00:14:59Z | 26087,284 | 0,135 | Abgelesen |
 
-Bereits vorhandene Intervalle mit derselben Quelle werden übersprungen.
+Die Quelle wird nicht aus der Excel-Datei gelesen. Der Importer ergänzt `manual_import` in der Spalte `note`; automatisch erfasste Messwerte enthalten dort die Entity-ID des Zählersensors.
+
+Bereits vorhandene importierte Intervalle werden übersprungen.
+
+Die Lovelace-API berechnet den Verbrauch je Intervall als Differenz aus `consumption_meter_kwh` und `consumption_meter_start_kwh`. Beim Excel-Import wird der Startzählerstand aus Zählerstand minus Excel-Delta abgeleitet; das Delta wird nicht als eigene Datenbankspalte gespeichert.

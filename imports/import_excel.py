@@ -6,7 +6,12 @@ import sqlite3
 from ..database import DATABASE_PATH  # noqa: TID252
 from .inspect_excel import ImportedInterval, normalize_timestamp
 
-SOURCE = "manual_import"
+IMPORT_NOTE = "manual_import"
+
+
+def _get_import_note(note: str | None) -> str:
+    """Keep the import marker and the workbook note in the note column."""
+    return f"{IMPORT_NOTE} | {note}" if note else IMPORT_NOTE
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,9 +34,9 @@ def count_existing_duplicates(rows: list[ImportedInterval]) -> int:
                 """
                 SELECT interval_start_utc, interval_end_utc
                 FROM meter_intervals
-                WHERE source = ?
+                WHERE note GLOB ?
                 """,
-                (SOURCE,),
+                (f"{IMPORT_NOTE}*",),
             )
         }
 
@@ -57,9 +62,9 @@ def import_excel(rows: list[ImportedInterval]) -> ImportResult:
                 """
                 SELECT interval_start_utc, interval_end_utc
                 FROM meter_intervals
-                WHERE source = ?
+                WHERE note GLOB ?
                 """,
-                (SOURCE,),
+                (f"{IMPORT_NOTE}*",),
             )
         }
         imported = 0
@@ -75,21 +80,17 @@ def import_excel(rows: list[ImportedInterval]) -> ImportResult:
                     interval_start_utc,
                     interval_end_utc,
                     consumption_meter_kwh,
-                    feed_in_meter_kwh,
-                    consumption_delta_kwh,
-                    note,
-                    source
+                    consumption_meter_start_kwh,
+                    note
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     row.start,
                     row.end,
                     row.consumption,
-                    row.feed_in,
-                    row.delta,
-                    row.note,
-                    SOURCE,
+                    row.consumption - row.delta,
+                    _get_import_note(row.note),
                 ),
             )
             imported += 1

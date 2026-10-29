@@ -1,9 +1,9 @@
-"""Tests for cumulative meter validation and transactional persistence."""
+"""Tests for cumulative meter validation and persistence."""
 
-# Internal helpers are exercised to verify transaction guarantees.
+# Internal helpers are exercised to verify interval persistence.
 # ruff: noqa: SLF001
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import sqlite3
 
@@ -15,9 +15,18 @@ from stromkostentracker import meter_writings
 
 def _prepare_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     database_path = tmp_path / "meter.db"
-    database_path.touch()
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("""
+            CREATE TABLE meter_intervals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                interval_start_utc TEXT NOT NULL,
+                interval_end_utc TEXT NOT NULL,
+                consumption_meter_kwh REAL,
+                consumption_meter_start_kwh REAL,
+                note TEXT
+            )
+        """)
     monkeypatch.setattr(meter_writings, "DATABASE_PATH", database_path)
-    meter_writings._ensure_meter_schema()
     return database_path
 
 
@@ -65,76 +74,86 @@ def test_validate_meter_state_requires_cumulative_energy_sensor() -> None:
             meter_writings.validate_meter_state(invalid_state, "sensor.energy")
 
 
-def test_record_meter_reading_uses_unknowns_for_baseline_switch_and_reset(
+def test_record_meter_readings_store_each_sensor_interval(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Deltas are not calculated without a matching increasing checkpoint."""
+    """Readings use per-sensor baselines and the note column as their source."""
     database_path = _prepare_database(tmp_path, monkeypatch)
     first_time = datetime(2026, 10, 26, 10, tzinfo=UTC)
 
     assert meter_writings._record_meter_reading("sensor.first", 100, first_time)
     assert meter_writings._record_meter_reading(
-        "sensor.first", 101.25, datetime(2026, 10, 26, 10, 15, tzinfo=UTC)
+        "sensor.first", 101.25, first_time + timedelta(minutes=10)
     )
     assert meter_writings._record_meter_reading(
-        "sensor.second", 5, datetime(2026, 10, 26, 10, 30, tzinfo=UTC)
+        "sensor.second", 5, first_time + timedelta(minutes=20)
     )
     assert meter_writings._record_meter_reading(
-        "sensor.second", 2, datetime(2026, 10, 26, 10, 45, tzinfo=UTC)
+        "sensor.second", 2, first_time + timedelta(minutes=30)
     )
     assert meter_writings._record_meter_reading(
-        "sensor.second", 2.5, datetime(2026, 10, 26, 11, tzinfo=UTC)
+        "sensor.second", 2.5, first_time + timedelta(minutes=40)
     )
 
     with sqlite3.connect(database_path) as connection:
+        columns = tuple(
+            row[1] for row in connection.execute("PRAGMA table_info(meter_intervals)")
+        )
         intervals = connection.execute(
-            """SELECT source, consumption_meter_start_kwh,
-                      consumption_meter_kwh, consumption_delta_kwh
+            """SELECT note, consumption_meter_start_kwh, consumption_meter_kwh
                FROM meter_intervals ORDER BY id"""
         ).fetchall()
-        checkpoint = connection.execute(
-            "SELECT entity_id, value_kwh FROM meter_checkpoint WHERE id = 1"
-        ).fetchone()
 
+    assert columns == (
+        "id",
+        "interval_start_utc",
+        "interval_end_utc",
+        "consumption_meter_kwh",
+        "consumption_meter_start_kwh",
+        "note",
+    )
     assert intervals == [
-        ("sensor.first", None, 100, None),
-        ("sensor.first", 100, 101.25, 1.25),
-        ("sensor.second", None, 5, None),
-        ("sensor.second", 5, 2, None),
-        ("sensor.second", 2, 2.5, 0.5),
+        ("sensor.first", None, 100),
+        ("sensor.first", 100, 101.25),
+        ("sensor.second", None, 5),
+        ("sensor.second", 5, 2),
+        ("sensor.second", 2, 2.5),
     ]
-    assert checkpoint == ("sensor.second", 2.5)
 
 
-def test_failed_checkpoint_commit_rolls_back_interval_and_checkpoint(
+def test_record_meter_reading_ignores_stale_timestamps(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An interval insert cannot commit if updating its checkpoint fails."""
+    """A stale timestamp cannot produce an overlapping interval."""
     database_path = _prepare_database(tmp_path, monkeypatch)
-    first_time = datetime(2026, 10, 26, 10, tzinfo=UTC)
-    meter_writings._record_meter_reading("sensor.energy", 10, first_time)
+    timestamp = datetime(2026, 10, 26, 10, tzinfo=UTC)
+
+    assert meter_writings._record_meter_reading("sensor.energy", 10, timestamp)
+    assert not meter_writings._record_meter_reading(
+        "sensor.energy", 11, timestamp - timedelta(minutes=1)
+    )
 
     with sqlite3.connect(database_path) as connection:
-        connection.execute("""
-            CREATE TRIGGER fail_checkpoint_update
-            BEFORE UPDATE ON meter_checkpoint
-            BEGIN
-                SELECT RAISE(ABORT, 'checkpoint update failed');
-            END
-        """)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM meter_intervals"
+        ).fetchone() == (1,)
 
-    with pytest.raises(sqlite3.IntegrityError):
+
+@pytest.mark.parametrize("value", [-1, float("inf"), float("nan")])
+def test_record_meter_reading_rejects_invalid_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    value: float,
+) -> None:
+    """Invalid cumulative values are rejected before they are stored."""
+    database_path = _prepare_database(tmp_path, monkeypatch)
+
+    with pytest.raises(ValueError, match="finite and non-negative"):
         meter_writings._record_meter_reading(
-            "sensor.energy", 11, datetime(2026, 10, 26, 10, 15, tzinfo=UTC)
+            "sensor.energy", value, datetime(2026, 10, 26, 10, tzinfo=UTC)
         )
 
     with sqlite3.connect(database_path) as connection:
-        intervals = connection.execute(
-            "SELECT consumption_meter_kwh FROM meter_intervals ORDER BY id"
-        ).fetchall()
-        checkpoint = connection.execute(
-            "SELECT value_kwh FROM meter_checkpoint WHERE id = 1"
-        ).fetchone()
-
-    assert intervals == [(10,)]
-    assert checkpoint == (10,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM meter_intervals"
+        ).fetchone() == (0,)

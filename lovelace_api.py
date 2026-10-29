@@ -32,8 +32,7 @@ def _read_month_data(
             dict(row)
             for row in connection.execute(
                 """SELECT interval_start_utc, interval_end_utc,
-                          consumption_meter_kwh, consumption_meter_start_kwh,
-                          consumption_delta_kwh, source
+                          consumption_meter_kwh, consumption_meter_start_kwh, note
                    FROM meter_intervals
                    WHERE datetime(interval_start_utc) < datetime(?)
                      AND datetime(interval_end_utc) > datetime(?)
@@ -176,9 +175,17 @@ def _calculate_month_data(
     for interval in intervals:
         start = _parse_timestamp(interval["interval_start_utc"])
         end = _parse_timestamp(interval["interval_end_utc"])
-        delta = _valid_number(interval.get("consumption_delta_kwh"))
+        meter_start = _valid_number(interval.get("consumption_meter_start_kwh"))
+        meter_end = _valid_number(interval.get("consumption_meter_kwh"))
+        delta = (
+            meter_end - meter_start
+            if meter_start is not None and meter_end is not None
+            else None
+        )
         if delta is not None and delta < 0:
             delta = None
+        note = interval.get("note")
+        source = str(note).partition(" | ")[0] if note else "unknown"
         for (
             segment_start,
             segment_end,
@@ -191,7 +198,7 @@ def _calculate_month_data(
             local_timezone,
         ):
             intervals_by_day_and_source.setdefault(segment_day, {}).setdefault(
-                interval["source"], []
+                source, []
             ).append((segment_start, segment_end, segment_delta))
 
     days: list[dict[str, Any]] = []

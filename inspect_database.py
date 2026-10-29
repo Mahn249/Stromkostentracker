@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 DATABASE_PATH = Path(__file__).parent / "energy_cost_tracker.db"
-SOURCE = "manual_import"  # Quelle für die importierten Daten
+IMPORT_NOTE = "manual_import"
 
 
 def parse_timestamp(value):
@@ -20,13 +20,12 @@ def inspect_database():
                 interval_start_utc,
                 interval_end_utc,
                 consumption_meter_kwh,
-                feed_in_meter_kwh,
-                consumption_delta_kwh
+                consumption_meter_start_kwh
             FROM meter_intervals
-            WHERE source = ?
+            WHERE note GLOB ?
             ORDER BY interval_start_utc
             """,
-            (SOURCE,),
+            (f"{IMPORT_NOTE}*",),
         ).fetchall()
 
     print("=== 1. DATENBESTAND ===")
@@ -43,23 +42,23 @@ def inspect_database():
 
     print("\n=== 2. MESSWERTE ===")
     consumption = [row[2] for row in rows if row[2] is not None]
-    feed_in = [row[3] for row in rows if row[3] is not None]
-    deltas = [row[4] for row in rows if row[4] is not None]
+    consumption_start = [row[3] for row in rows if row[3] is not None]
 
     print(f"Fehlende Verbrauchszählerstände: {len(rows) - len(consumption)}")
-    print(f"Fehlende Einspeisezählerstände: {len(rows) - len(feed_in)}")
-    print(f"Fehlende Verbrauchsdifferenzen: {len(rows) - len(deltas)}")
+    print(
+        f"Fehlende Verbrauchszählerstände am Intervallstart: "
+        f"{len(rows) - len(consumption_start)}"
+    )
 
     if consumption:
         print(
             f"Verbrauchszählerstand: {min(consumption):.3f} bis {max(consumption):.3f} kWh"
         )
-    if feed_in:
-        print(f"Einspeisezählerstand: {min(feed_in):.3f} bis {max(feed_in):.3f} kWh")
-    if deltas:
-        print(f"Verbrauchsdifferenz: {min(deltas):.3f} bis {max(deltas):.3f} kWh")
-        print(f"Summe der Verbrauchsdifferenzen: {sum(deltas):.3f} kWh")
-        print(f"Negative Verbrauchsdifferenzen: {sum(value < 0 for value in deltas)}")
+    if consumption_start:
+        print(
+            f"Verbrauchszählerstand am Intervallstart: "
+            f"{min(consumption_start):.3f} bis {max(consumption_start):.3f} kWh"
+        )
 
     print("\n=== 3. ZEITLICHE LÜCKEN ===")
     gaps = []
@@ -77,21 +76,19 @@ def inspect_database():
         print(f"... und {len(gaps) - 10} weitere")
 
     print("\n=== 4. VERBRAUCH PRO MONAT (UTC) ===")
-    monthly = defaultdict(lambda: {"kwh": 0.0, "intervals": 0})
+    monthly = defaultdict(lambda: {"intervals": 0})
     daily_counts = Counter()
 
     for row, start in zip(rows, starts):
         month = start.strftime("%Y-%m")
         day = start.strftime("%Y-%m-%d")
 
-        if row[4] is not None:
-            monthly[month]["kwh"] += row[4]
         monthly[month]["intervals"] += 1
         daily_counts[day] += 1
 
     for month in sorted(monthly):
         values = monthly[month]
-        print(f"{month}: {values['kwh']:.2f} kWh, {values['intervals']} Intervalle")
+        print(f"{month}: {values['intervals']} Intervalle")
 
     print("\n=== 5. UNVOLLSTÄNDIGE TAGE (UTC) ===")
     days = sorted(daily_counts)
