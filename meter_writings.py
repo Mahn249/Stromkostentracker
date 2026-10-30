@@ -106,7 +106,7 @@ class MeterIntervalWriter:
         hass: HomeAssistant,
         entity_id: str,
         interval: timedelta,
-    ) -> MeterIntervalWriter:
+    ) -> "MeterIntervalWriter":
         """Validate the selected sensor and prepare the database."""
         initial_value = validate_meter_state(hass.states.get(entity_id), entity_id)
         await hass.async_add_executor_job(
@@ -142,7 +142,7 @@ class MeterIntervalWriter:
             stored = await self.hass.async_add_executor_job(
                 _record_meter_reading, self.entity_id, value_kwh, now
             )
-        except OSError, sqlite3.Error:
+        except (OSError, sqlite3.Error):
             _LOGGER.exception(
                 "Unable to store cumulative energy reading for %s",
                 self.entity_id,
