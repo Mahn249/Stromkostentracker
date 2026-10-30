@@ -1,4 +1,10 @@
 {
   "name": "Energycost-tracker",
-  "content_in_root": true
+  "version": 0.2.1,
+  "content_in_root": true,
+  "domain": "stromkostentracker",
+  "documentation": "https://github.com/Mahn249/Stromkostentracker",
+  "issue_tracker": "
+  "codeowners": ["@Man249"],
+  "integration_type": "service"
 }
