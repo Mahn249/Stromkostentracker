@@ -87,7 +87,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                 inspection = await self.hass.async_add_executor_job(
                     _inspect_uploaded_excel, self.hass, user_input[CONF_EXCEL_FILE]
                 )
-            except InvalidExcelFile, ValueError:
+            except (InvalidExcelFile, ValueError):
                 errors["base"] = "invalid_excel_file"
             else:
                 if inspection.errors:
@@ -104,7 +104,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                         duplicates = await self.hass.async_add_executor_job(
                             count_existing_duplicates, inspection.rows
                         )
-                    except OSError, sqlite3.Error, ValueError:
+                    except (OSError, sqlite3.Error, ValueError):
                         errors["base"] = "database_error"
                     else:
                         if duplicates == len(inspection.rows):
@@ -213,7 +213,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                 )
             except payment_store.PaymentValidationError as err:
                 errors["base"] = err.reason
-            except OSError, sqlite3.Error:
+            except (OSError, sqlite3.Error):
                 errors["base"] = "database_error"
             else:
                 return self.async_create_entry(title="", data=self.config_entry.options)
@@ -229,7 +229,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             self._payments = await self.hass.async_add_executor_job(
                 payment_store.list_payments
             )
-        except OSError, sqlite3.Error:
+        except (OSError, sqlite3.Error):
             return self.async_abort(reason="database_error")
         if not self._payments:
             return self.async_abort(reason="no_payments")
@@ -258,7 +258,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                 )
             except payment_store.PaymentValidationError as err:
                 errors["base"] = err.reason
-            except OSError, sqlite3.Error:
+            except (OSError, sqlite3.Error):
                 errors["base"] = "database_error"
             else:
                 return self.async_create_entry(title="", data=self.config_entry.options)
@@ -276,7 +276,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             self._payments = await self.hass.async_add_executor_job(
                 payment_store.list_payments
             )
-        except OSError, sqlite3.Error:
+        except (OSError, sqlite3.Error):
             return self.async_abort(reason="database_error")
         if not self._payments:
             return self.async_abort(reason="no_payments")
@@ -298,7 +298,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                 await self.hass.async_add_executor_job(
                     payment_store.delete_payment, self._selected_payment_id
                 )
-            except OSError, sqlite3.Error:
+            except (OSError, sqlite3.Error):
                 errors["base"] = "database_error"
             else:
                 return self.async_create_entry(title="", data=self.config_entry.options)
@@ -316,7 +316,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                 )
             except tariff_store.TariffValidationError as exc:
                 errors["base"] = exc.reason
-            except OSError, sqlite3.Error:
+            except (OSError, sqlite3.Error):
                 errors["base"] = "database_error"
             else:
                 async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
@@ -333,7 +333,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             self._tariffs = await self.hass.async_add_executor_job(
                 tariff_store.list_tariffs
             )
-        except OSError, sqlite3.Error:
+        except (OSError, sqlite3.Error):
             return self.async_abort(reason="database_error")
         if not self._tariffs:
             return self.async_abort(reason="no_tariffs")
@@ -357,7 +357,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                 )
             except tariff_store.TariffValidationError as exc:
                 errors["base"] = exc.reason
-            except OSError, sqlite3.Error:
+            except (OSError, sqlite3.Error):
                 errors["base"] = "database_error"
             else:
                 async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
@@ -376,7 +376,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
             self._tariffs = await self.hass.async_add_executor_job(
                 tariff_store.list_tariffs
             )
-        except OSError, sqlite3.Error:
+        except (OSError, sqlite3.Error):
             return self.async_abort(reason="database_error")
         if not self._tariffs:
             return self.async_abort(reason="no_tariffs")
@@ -397,7 +397,7 @@ class StromkostentrackerOptionsFlow(config_entries.OptionsFlow):
                 await self.hass.async_add_executor_job(
                     tariff_store.delete_tariff, self._selected_id
                 )
-            except OSError, sqlite3.Error:
+            except (OSError, sqlite3.Error):
                 errors["base"] = "database_error"
             else:
                 async_dispatcher_send(self.hass, SIGNAL_TARIFFS_UPDATED)
