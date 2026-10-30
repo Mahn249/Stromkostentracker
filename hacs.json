@@ -1,6 +1,6 @@
 {
   "name": "Energycost-tracker",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "content_in_root": true,
   "domain": "stromkostentracker",
   "documentation": "https://github.com/Mahn249/Stromkostentracker",
